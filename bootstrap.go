@@ -211,6 +211,7 @@ func fetchTRC(topo *topology.Topo) error {
 
 	trustDBConf := truststorage.TrustDBConf{}
 	trustDBConf[truststorage.ConnectionKey] = "gen-cache/sd" + topo.ISD_AS.FileFmt(false) + ".trust.db"
+	trustDBConf[truststorage.BackendKey] = "sqlite"
 	trustDB, err := trustDBConf.New()
 	if err != nil {
 		log.Crit("Unable to initialize trustDB", "err", err)
