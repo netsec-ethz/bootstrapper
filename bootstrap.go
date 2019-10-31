@@ -64,7 +64,7 @@ ResolutionFraction = 0.4
 
 [general]
 ReconnectToDispatcher = true
-ConfigDir = "gen/ISD{{ .ISD_AS.I }}/AS{{ .ISD_AS.A }}/endhost"
+ConfigDir = "{{ .ConfigDirectory }}"
 ID = "sd{{ .ISD_AS.FileFmt false }}"
 
 [trustDB]
@@ -106,6 +106,8 @@ type templateContext struct {
 	ISD_AS addr.IA
 
 	IPAddress net.IP
+
+	ConfigDirectory string
 }
 
 func tryBootstrapping() (*topology.Topo, error) {
@@ -128,7 +130,7 @@ func tryBootstrapping() (*topology.Topo, error) {
 		topo, raw := fetchTopology(address)
 
 		if topo != nil {
-			err := ioutil.WriteFile(cfg.Topology, raw, 0644)
+			err := ioutil.WriteFile(cfg.SciondDirectory + "/topology.json", raw, 0644)
 			if err != nil {
 				log.Error("Bootstrapper could not store topology", "err", err)
 				return nil, err
@@ -151,7 +153,7 @@ func tryBootstrapping() (*topology.Topo, error) {
 
 func generateSciondConfig(topo *topology.Topo) (*topology.Topo, error) {
 	t := template.Must(template.New("config").Parse(sciondConfigTemplate))
-	sciondFile, err := os.OpenFile(cfg.SciondConfig, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	sciondFile, err := os.OpenFile(cfg.SciondDirectory + "/sd.toml", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		log.Error("Could not open sciond config file", "err", err)
 		return nil, err
@@ -166,6 +168,8 @@ func generateSciondConfig(topo *topology.Topo) (*topology.Topo, error) {
 		ISD_AS: topo.ISD_AS,
 
 		IPAddress: address,
+
+		ConfigDirectory: cfg.SciondDirectory,
 	}
 	err = t.Execute(sciondFile, ctx)
 	if err != nil {
@@ -205,8 +209,9 @@ func getIPAddress() net.IP {
 
 func fetchTRC(topo *topology.Topo) error {
 
-	cfg.TrustDB[truststorage.ConnectionKey] = "gen-cache/sd" + topo.ISD_AS.FileFmt(false) + ".trust.db"
-	trustDB, err := cfg.TrustDB.New()
+	trustDBConf := truststorage.TrustDBConf{}
+	trustDBConf[truststorage.ConnectionKey] = "gen-cache/sd" + topo.ISD_AS.FileFmt(false) + ".trust.db"
+	trustDB, err := trustDBConf.New()
 	if err != nil {
 		log.Crit("Unable to initialize trustDB", "err", err)
 		return err

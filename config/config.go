@@ -5,7 +5,6 @@ import (
 	"github.com/scionproto/scion/go/lib/common"
 	"github.com/scionproto/scion/go/lib/config"
 	"github.com/scionproto/scion/go/lib/env"
-	"github.com/scionproto/scion/go/lib/truststorage"
 	"io"
 )
 
@@ -14,23 +13,22 @@ var _ config.Config = (*Config)(nil)
 type Config struct {
 	Interface string
 
-	Topology string
-
-	SciondConfig string
+	SciondDirectory string
 
 	Mechanisms Mechanisms
 
 	Logging env.Logging
-
-	TrustDB truststorage.TrustDBConf
 }
 
 func (cfg *Config) InitDefaults() {
 	config.InitAll(
 		&cfg.Mechanisms,
 		&cfg.Logging,
-		&cfg.TrustDB,
 	)
+
+	if cfg.SciondDirectory == "" {
+		cfg.SciondDirectory = "."
+	}
 }
 
 func (cfg *Config) Validate() error {
@@ -38,17 +36,8 @@ func (cfg *Config) Validate() error {
 		return common.NewBasicError("Interface must be set", nil)
 	}
 
-	if cfg.Topology == "" {
-		return common.NewBasicError("Topology must be set", nil)
-	}
-
-	if cfg.SciondConfig == "" {
-		return common.NewBasicError("SciondConfig must be set", nil)
-	}
-
 	return config.ValidateAll(
 		&cfg.Logging,
-		// don't validate trustDB as db path is learned during execution
 	)
 }
 
@@ -57,7 +46,6 @@ func (cfg *Config) Sample(dst io.Writer, path config.Path, _ config.CtxMap) {
 	config.WriteSample(dst, path, config.CtxMap{config.ID: idSample},
 		&cfg.Mechanisms,
 		&cfg.Logging,
-		&cfg.TrustDB,
 	)
 }
 

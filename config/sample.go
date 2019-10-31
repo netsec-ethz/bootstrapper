@@ -6,11 +6,8 @@ const bootstrapperSample = `
 # The network interface to use (default "")
 Interface = eth0
 
-# The path where the discovered topology is placed (default "")
-Topology = sciond/topology.json
-
-# The path where the sciond config will be generated (default "")
-SciondConfig = sciond/sd.toml
+# The path where sciond config files will be placed (default ".")
+SciondDirectory = sciond/
 `
 
 const mechanismIdSample = "mechanisms"
