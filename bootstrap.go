@@ -48,13 +48,15 @@ const (
 	discoveryDDDSDNSName    string = "x-sciondiscovery:tcp"
 
 	sciondConfigTemplate string = `
-[tracing]
-agent = "127.0.0.1:1409"
-enabled = true
-debug = true
+[general]
+ReconnectToDispatcher = true
+ConfigDir = "{{ .ConfigDirectory }}"
+ID = "sd{{ .ISD_AS.FileFmt false }}"
 
-[metrics]
-Prometheus = "[127.0.0.1]:9105"
+[sd]
+Public = "{{ .ISD_AS }},[{{ .IPAddress }}]:0"
+Reliable = "/run/shm/sciond/sd{{ .ISD_AS.FileFmt false }}.sock"
+Unix = "/run/shm/sciond/sd{{ .ISD_AS.FileFmt false }}.unix"
 
 [quic]
 KeyFile = "gen-certs/tls.key"
@@ -62,25 +64,19 @@ CertFile = "gen-certs/tls.pem"
 Address = "[{{ .IPAddress }}]:0"
 ResolutionFraction = 0.4
 
-[general]
-ReconnectToDispatcher = true
-ConfigDir = "{{ .ConfigDirectory }}"
-ID = "sd{{ .ISD_AS.FileFmt false }}"
+[sd.pathDB]
+Connection = "gen-cache/sd{{ .ISD_AS.FileFmt false }}.path.db"
 
 [trustDB]
 Connection = "gen-cache/sd{{ .ISD_AS.FileFmt false }}.trust.db"
 Backend = "sqlite"
 
-[sd]
-Public = "{{ .ISD_AS }},[{{ .IPAddress }}]:0"
-Reliable = "/run/shm/sciond/sd{{ .ISD_AS.FileFmt false }}.sock"
-Unix = "/run/shm/sciond/sd{{ .ISD_AS.FileFmt false }}.unix"
-
-[sd.pathDB]
-Connection = "gen-cache/sd{{ .ISD_AS.FileFmt false }}.path.db"
-
 [logging.console]
 Level = "crit"
+
+[logging.file]
+Path = "logs/sd{{ .ISD_AS.FileFmt false }}.log"
+Level = "debug"
 
 [discovery.static]
 Enable = {{ .HasDiscovery }}
@@ -88,10 +84,13 @@ Enable = {{ .HasDiscovery }}
 [discovery.dynamic]
 Enable = {{ .HasDiscovery }}
 
-[logging.file]
-Path = "logs/sd{{ .ISD_AS.FileFmt false }}.log"
-Level = "debug"
+[tracing]
+agent = "127.0.0.1:1409"
+enabled = true
+debug = true
 
+[metrics]
+Prometheus = "[127.0.0.1]:9105"
 `
 )
 
@@ -136,9 +135,9 @@ func tryBootstrapping() (*topology.Topo, error) {
 				return nil, err
 			}
 
-			i, err := generateSciondConfig(topo)
+			err = generateSciondConfig(topo)
 			if err != nil {
-				return i, err
+				return nil, err
 			}
 
 			err = fetchTRC(topo)
@@ -151,16 +150,16 @@ func tryBootstrapping() (*topology.Topo, error) {
 	}
 }
 
-func generateSciondConfig(topo *topology.Topo) (*topology.Topo, error) {
+func generateSciondConfig(topo *topology.Topo) error {
 	t := template.Must(template.New("config").Parse(sciondConfigTemplate))
 	sciondFile, err := os.OpenFile(cfg.SciondDirectory + "/sd.toml", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		log.Error("Could not open sciond config file", "err", err)
-		return nil, err
+		return err
 	}
 	address := getIPAddress()
 	if address == nil {
-		return nil, errors.New("")
+		return errors.New("")
 	}
 	ctx := templateContext{
 		HasDiscovery: len(topo.DSNames) > 0,
@@ -174,37 +173,9 @@ func generateSciondConfig(topo *topology.Topo) (*topology.Topo, error) {
 	err = t.Execute(sciondFile, ctx)
 	if err != nil {
 		log.Error("Could template sciond config file", "err", err)
-		return nil, err
+		return err
 	}
-	return nil, nil
-}
-
-func getIPAddress() net.IP {
-	intf := getInterface()
-	if intf == nil {
-		return nil
-	}
-	addresses, err := intf.Addrs()
-	if err != nil {
-		log.Error("Bootstrapper could not get IP address", "err", err)
-		return nil
-	}
-	var address net.IP
-	found := false
-	for _, a := range addresses {
-		switch v := a.(type) {
-		case *net.IPNet:
-			address = v.IP
-			found = true
-		case *net.IPAddr:
-			address = v.IP
-			found = true
-		}
-		if found {
-			break
-		}
-	}
-	return address
+	return nil
 }
 
 func fetchTRC(topo *topology.Topo) error {
@@ -509,6 +480,34 @@ func getInterface() *net.Interface {
 	return intf
 }
 
+func getIPAddress() net.IP {
+	intf := getInterface()
+	if intf == nil {
+		return nil
+	}
+	addresses, err := intf.Addrs()
+	if err != nil {
+		log.Error("Bootstrapper could not get IP address", "err", err)
+		return nil
+	}
+	var address net.IP
+	found := false
+	for _, a := range addresses {
+		switch v := a.(type) {
+		case *net.IPNet:
+			address = v.IP
+			found = true
+		case *net.IPAddr:
+			address = v.IP
+			found = true
+		}
+		if found {
+			break
+		}
+	}
+	return address
+}
+
 func getDomainName() string {
 	hostname, err := os.Hostname()
 	if err != nil {
@@ -525,6 +524,7 @@ func getDomainName() string {
 	return split[1]
 }
 
+// Order as defined by DNS-SD RFC
 type byPriority []dns.SRV
 
 func (s byPriority) Len() int {
@@ -549,6 +549,7 @@ func (s byPriority) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
+// Order as defined by RFC
 type byOrder []dns.NAPTR
 
 func (s byOrder) Len() int {
@@ -569,6 +570,7 @@ func (s byOrder) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
+// Glue to provide fetched topology
 type providerFunc func() *topology.Topo
 
 func (f providerFunc) Get() *topology.Topo {

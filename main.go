@@ -54,6 +54,7 @@ func realMain() int {
 	_, err := tryBootstrapping()
 	if err != nil {
 		log.Error("Unable to load topology", "err", err)
+		return 1
 	}
 
 	return 0
