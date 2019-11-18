@@ -53,7 +53,7 @@ func realMain() int {
 	itopo.Init("", proto.ServiceType_unset, itopo.Callbacks{})
 	_, err := tryBootstrapping()
 	if err != nil {
-		log.Error("Unable to load topology", "err", err)
+		log.Error("Bootstrapping failed", "err", err)
 		return 1
 	}
 

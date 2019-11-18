@@ -79,10 +79,10 @@ Path = "logs/sd{{ .ISD_AS.FileFmt false }}.log"
 Level = "debug"
 
 [discovery.static]
-Enable = {{ .HasDiscovery }}
+Enable = {{ .HasDiscoverySection }}
 
 [discovery.dynamic]
-Enable = {{ .HasDiscovery }}
+Enable = {{ .HasDiscoverySection }}
 
 [tracing]
 agent = "127.0.0.1:1409"
@@ -100,7 +100,7 @@ var (
 )
 
 type templateContext struct {
-	HasDiscovery bool
+	HasDiscoverySection bool
 
 	ISD_AS addr.IA
 
@@ -150,6 +150,30 @@ func tryBootstrapping() (*topology.Topo, error) {
 	}
 }
 
+func fetchTopology(address string) (*topology.Topo, common.RawBytes) {
+	ctx, cancelF := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancelF()
+	params := discovery.FetchParams{Mode: discovery.Static, File: discovery.Endhost}
+
+	ip := addr.HostFromIPStr(address)
+
+	if ip == nil {
+		log.Debug("Discovered invalid address", "address", address)
+		return nil, nil
+	}
+	log.Debug("Trying to fetch from " + address)
+
+	topo, raw, err := discovery.FetchTopoRaw(ctx, params, &addr.AppAddr{L3: ip, L4: addr.NewL4TCPInfo(discoveryPort)}, nil)
+
+	if err != nil {
+		log.Debug("Nothing was found")
+		return nil, nil
+	}
+
+	log.Debug("candidate topology found")
+	return topo, raw
+}
+
 func generateSciondConfig(topo *topology.Topo) error {
 	t := template.Must(template.New("config").Parse(sciondConfigTemplate))
 	sciondFile, err := os.OpenFile(cfg.SciondDirectory + "/sd.toml", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
@@ -162,7 +186,7 @@ func generateSciondConfig(topo *topology.Topo) error {
 		return errors.New("")
 	}
 	ctx := templateContext{
-		HasDiscovery: len(topo.DSNames) > 0,
+		HasDiscoverySection: len(topo.DSNames) > 0,
 
 		ISD_AS: topo.ISD_AS,
 
@@ -219,39 +243,7 @@ func fetchTRC(topo *topology.Topo) error {
 		return err
 	}
 
-	if isTopologyValid(topo) {
-		return err
-	}
 	return nil
-}
-
-func fetchTopology(address string) (*topology.Topo, common.RawBytes) {
-	ctx, cancelF := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancelF()
-	params := discovery.FetchParams{Mode: discovery.Static, File: discovery.Endhost}
-
-	ip := addr.HostFromIPStr(address)
-
-	if ip == nil {
-		log.Debug("Discovered invalid address", "address", address)
-		return nil, nil
-	}
-	log.Debug("Trying to fetch from " + address)
-
-	topo, raw, err := discovery.FetchTopoRaw(ctx, params, &addr.AppAddr{L3: ip, L4: addr.NewL4TCPInfo(discoveryPort)}, nil)
-
-	if err != nil {
-		log.Debug("Nothing was found")
-		return nil, nil
-	}
-
-	log.Debug("candidate topology found")
-	return topo, raw
-}
-
-func isTopologyValid(topo *topology.Topo) bool {
-	// TODO (veenj)
-	return true
 }
 
 type HintGenerator interface {
@@ -267,11 +259,7 @@ func (g *DHCPHintGenerator) Generate(channel chan string) {
 	if intf == nil {
 		return
 	}
-
-	go func() {
-		defer log.LogPanicAndExit()
-		probeInterface(intf, channel)
-	}()
+	probeInterface(intf, channel)
 }
 
 func probeInterface(currentInterface *net.Interface, channel chan string) {
@@ -279,7 +267,7 @@ func probeInterface(currentInterface *net.Interface, channel chan string) {
 	client := client4.NewClient()
 	localIPs, err := dhcpv4.IPv4AddrsForInterface(currentInterface)
 	if err != nil || len(localIPs) == 0 {
-		log.Warn("DHCP could not get local IPs", "interface", currentInterface.Name, "err", err)
+		log.Warn("DHCP hinter could not get local IPs", "interface", currentInterface.Name, "err", err)
 		return
 	}
 	p, err := dhcpv4.NewInform(currentInterface.HardwareAddr, localIPs[0], dhcpv4.WithRequestedOptions(
@@ -314,6 +302,7 @@ func probeInterface(currentInterface *net.Interface, channel chan string) {
 
 	if err != nil {
 		log.Warn("DHCP failed to to read search domains", "err", err)
+		// don't return, proceed without search domains
 	}
 
 	dnsInfo := DNSInfo{}
@@ -321,8 +310,13 @@ func probeInterface(currentInterface *net.Interface, channel chan string) {
 	for _, item := range resolvers {
 		dnsInfo.resolvers = append(dnsInfo.resolvers, item.String())
 	}
-	for _, item := range searchDomains.Labels {
-		dnsInfo.searchDomains = append(dnsInfo.searchDomains, item)
+
+	if searchDomains != nil {
+		for _, item := range searchDomains.Labels {
+			dnsInfo.searchDomains = append(dnsInfo.searchDomains, item)
+		}
+	} else {
+		dnsInfo.searchDomains = []string{}
 	}
 
 	dnsServersChannel <- dnsInfo
@@ -335,7 +329,6 @@ type DNSSDHintGenerator struct{}
 
 func (g *DNSSDHintGenerator) Generate(channel chan string) {
 	for {
-
 		dnsServer := <-dnsServersChannel
 		dnsServer.searchDomains = append(dnsServer.searchDomains, getDomainName())
 
@@ -353,17 +346,17 @@ type DNSInfo struct {
 	searchDomains []string
 }
 
+func doServiceDiscovery(channel chan string, resolver, domain string) {
+	query := discoveryServiceDNSName + "." + domain + "."
+	log.Debug("DNS-SD", "query", query, "rr", dns.TypePTR, "resolver", resolver)
+	resolveDNS(resolver, query, dns.TypePTR, channel)
+}
+
 // Straightforward Naming Authority Pointer
 func doSNAPTRDiscovery(channel chan string, resolver, domain string) {
 	query := domain + "."
 	log.Debug("DNS-S-NAPTR", "query", query, "rr", dns.TypeNAPTR, "resolver", resolver)
 	resolveDNS(resolver, query, dns.TypeNAPTR, channel)
-}
-
-func doServiceDiscovery(channel chan string, resolver, domain string) {
-	query := discoveryServiceDNSName + "." + domain + "."
-	log.Debug("DNS-SD", "query", query, "rr", dns.TypePTR, "resolver", resolver)
-	resolveDNS(resolver, query, dns.TypePTR, channel)
 }
 
 func resolveDNS(resolver, query string, dnsRR uint16, channel chan string) {
