@@ -163,7 +163,10 @@ func fetchTopology(address string) (*topology.Topo, common.RawBytes) {
 	}
 	log.Debug("Trying to fetch from " + address)
 
+	now := time.Now().UnixNano()
 	topo, raw, err := discovery.FetchTopoRaw(ctx, params, &addr.AppAddr{L3: ip, L4: addr.NewL4TCPInfo(discoveryPort)}, nil)
+	then := time.Now().UnixNano()
+	log.Debug("timing", "type", "topo", "value", (then - now))
 
 	if err != nil {
 		log.Debug("Nothing was found")
@@ -237,7 +240,10 @@ func fetchTRC(topo *topology.Topo) error {
 		log.Crit(infraenv.ErrAppUnableToInitMessenger, "err", err)
 		return err
 	}
+	now := time.Now().UnixNano()
 	err = trustStore.LoadAuthoritativeTRCWithNetwork("")
+	then := time.Now().UnixNano()
+	log.Debug("timing", "type", "trc", "value", (then - now))
 	if err != nil {
 		log.Crit("Unable to load local TRC", "err", err)
 		return err
@@ -293,7 +299,10 @@ func probeInterface(currentInterface *net.Interface, channel chan string) {
 		log.Crit("DHCP hinter failed to open receiver socket", "interface", currentInterface.Name, "err", err)
 		return
 	}
+	now := time.Now().UnixNano()
 	ack, err := client.SendReceive(sender, receiver, p, dhcpv4.MessageTypeAck)
+	then := time.Now().UnixNano()
+	log.Debug("timing", "type", "dhcp", "value", (then - now))
 	if err != nil {
 		log.Warn("DHCP hinter failed to send inform request", "interface", currentInterface.Name, "err", err)
 		return
@@ -350,21 +359,27 @@ func (g *DNSSDHintGenerator) Generate(channel chan string) {
 }
 
 type DNSInfo struct {
-	resolvers     []string
+	resolvers	 []string
 	searchDomains []string
 }
 
 func doServiceDiscovery(channel chan string, resolver, domain string) {
 	query := discoveryServiceDNSName + "." + domain + "."
 	log.Debug("DNS-SD", "query", query, "rr", dns.TypePTR, "resolver", resolver)
+	now := time.Now().UnixNano()
 	resolveDNS(resolver, query, dns.TypePTR, channel)
+	then := time.Now().UnixNano()
+	log.Debug("timing", "type", "dnssd", "value", (then - now))
 }
 
 // Straightforward Naming Authority Pointer
 func doSNAPTRDiscovery(channel chan string, resolver, domain string) {
 	query := domain + "."
 	log.Debug("DNS-S-NAPTR", "query", query, "rr", dns.TypeNAPTR, "resolver", resolver)
+	now := time.Now().UnixNano()
 	resolveDNS(resolver, query, dns.TypeNAPTR, channel)
+	then := time.Now().UnixNano()
+	log.Debug("timing", "type", "dnssnaptr", "value", (then - now))
 }
 
 func resolveDNS(resolver, query string, dnsRR uint16, channel chan string) {
@@ -451,9 +466,12 @@ func (g *MDNSSDHintGenerator) Generate(channel chan string) {
 		return
 	}
 
+	var now int64
 	entries := make(chan *zeroconf.ServiceEntry)
-	go func(results <-chan *zeroconf.ServiceEntry) {
+	go func(now *int64, results <-chan *zeroconf.ServiceEntry) {
 		defer log.LogPanicAndExit()
+		then := time.Now().UnixNano()
+		log.Debug("timing", "type", "mdns", "value", (then - *now))
 		for entry := range results {
 			for _, address := range entry.AddrIPv4 {
 				channel <- address.String()
@@ -463,10 +481,11 @@ func (g *MDNSSDHintGenerator) Generate(channel chan string) {
 			}
 		}
 		log.Debug("mDNS has no more entries.")
-	}(entries)
+	}(&now, entries)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
 	defer cancel()
+	now = time.Now().UnixNano()
 	err = resolver.Browse(ctx, "_sciondiscovery._tcp", "local.", entries)
 	if err != nil {
 		log.Warn("mDNS could not lookup", "err", err)
