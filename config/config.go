@@ -15,14 +15,21 @@ type Config struct {
 
 	SciondDirectory string
 
-	Mechanisms Mechanisms
+	Mechanisms struct {
+		DHCP bool
+
+		MDNS bool
+
+		DNSSD bool
+
+		DNSNAPTR bool
+	}
 
 	Logging env.Logging
 }
 
 func (cfg *Config) InitDefaults() {
 	config.InitAll(
-		&cfg.Mechanisms,
 		&cfg.Logging,
 	)
 
@@ -44,42 +51,10 @@ func (cfg *Config) Validate() error {
 func (cfg *Config) Sample(dst io.Writer, path config.Path, _ config.CtxMap) {
 	config.WriteString(dst, bootstrapperSample)
 	config.WriteSample(dst, path, config.CtxMap{config.ID: idSample},
-		&cfg.Mechanisms,
 		&cfg.Logging,
 	)
 }
 
 func (cfg *Config) ConfigName() string {
 	return "bootstrapper_config"
-}
-
-var _ config.Config = (*Mechanisms)(nil)
-
-type Mechanisms struct {
-	DHCP bool
-
-	MDNS bool
-
-	DNSSD bool
-
-	DNSNAPTR bool
-}
-
-func (cfg *Mechanisms) InitDefaults() {
-	cfg.DHCP = true
-	cfg.MDNS = true
-	cfg.DNSSD = true
-	cfg.DNSNAPTR = true
-}
-
-func (cfg *Mechanisms) Validate() error {
-	return nil
-}
-
-func (cfg *Mechanisms) Sample(dst io.Writer, path config.Path, ctx config.CtxMap) {
-	config.WriteString(dst, mechanismsSample)
-}
-
-func (cfg *Mechanisms) ConfigName() string {
-	return "mechanisms"
 }

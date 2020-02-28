@@ -255,6 +255,10 @@ var _ HintGenerator = (*DHCPHintGenerator)(nil)
 type DHCPHintGenerator struct{}
 
 func (g *DHCPHintGenerator) Generate(channel chan string) {
+	if ! cfg.Mechanisms.DHCP {
+		return
+	}
+
 	intf := getInterface()
 	if intf == nil {
 		return
@@ -334,8 +338,12 @@ func (g *DNSSDHintGenerator) Generate(channel chan string) {
 
 		for _, resolver := range dnsServer.resolvers {
 			for _, domain := range dnsServer.searchDomains {
-				doServiceDiscovery(channel, resolver, domain)
-				doSNAPTRDiscovery(channel, resolver, domain)
+				if cfg.Mechanisms.DNSSD {
+					doServiceDiscovery(channel, resolver, domain)
+				}
+				if cfg.Mechanisms.DNSNAPTR {
+					doSNAPTRDiscovery(channel, resolver, domain)
+				}
 			}
 		}
 	}
@@ -429,6 +437,9 @@ var _ HintGenerator = (*MDNSSDHintGenerator)(nil)
 type MDNSSDHintGenerator struct{}
 
 func (g *MDNSSDHintGenerator) Generate(channel chan string) {
+	if ! cfg.Mechanisms.MDNS {
+		return
+	}
 	intf := getInterface()
 	if intf == nil {
 		return
