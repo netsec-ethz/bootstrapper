@@ -199,7 +199,7 @@ func generateSciondConfig(topo *topology.Topo) error {
 	}
 	err = t.Execute(sciondFile, ctx)
 	if err != nil {
-		log.Error("Could template sciond config file", "err", err)
+		log.Error("Could not template sciond config file", "err", err)
 		return err
 	}
 	return nil
@@ -307,7 +307,9 @@ func probeInterface(currentInterface *net.Interface, channel chan string) {
 		log.Warn("DHCP hinter failed to send inform request", "interface", currentInterface.Name, "err", err)
 		return
 	}
-	channel <- dhcpv4.GetIP(dhcpv4.OptionDefaultWorldWideWebServer, ack.Options).String()
+	ip := dhcpv4.GetIP(dhcpv4.OptionDefaultWorldWideWebServer, ack.Options).String()
+	log.Debug("DHCP hint", "IP", ip)
+	channel <- ip
 
 	resolvers := dhcpv4.GetIPs(dhcpv4.OptionDomainNameServer, ack.Options)
 	rawSearchDomains := ack.Options.Get(dhcpv4.OptionDNSDomainSearchList)
@@ -365,9 +367,9 @@ type DNSInfo struct {
 
 func doServiceDiscovery(channel chan string, resolver, domain string) {
 	query := discoveryServiceDNSName + "." + domain + "."
-	log.Debug("DNS-SD", "query", query, "rr", dns.TypePTR, "resolver", resolver)
+	log.Debug("DNS-SD", "query", query, "rr", dns.TypeSRV, "resolver", resolver)
 	now := time.Now().UnixNano()
-	resolveDNS(resolver, query, dns.TypePTR, channel)
+	resolveDNS(resolver, query, dns.TypeSRV, channel)
 	then := time.Now().UnixNano()
 	log.Debug("timing", "type", "dnssd", "value", (then - now))
 }
@@ -413,9 +415,11 @@ func resolveDNS(resolver, query string, dnsRR uint16, channel chan string) {
 			serviceRecords = append(serviceRecords, result)
 		case *dns.A:
 			result := *(answer.(*dns.A))
+			log.Debug("DNS hint", "IP", result.A.String())
 			channel <- result.A.String()
 		case *dns.AAAA:
 			result := *(answer.(*dns.AAAA))
+			log.Debug("DNS hint", "IP", result.AAAA.String())
 			channel <- result.AAAA.String()
 		}
 	}
@@ -474,9 +478,11 @@ func (g *MDNSSDHintGenerator) Generate(channel chan string) {
 		log.Debug("timing", "type", "mdns", "value", (then - *now))
 		for entry := range results {
 			for _, address := range entry.AddrIPv4 {
+				log.Debug("mDNS hint", "IP", address.String())
 				channel <- address.String()
 			}
 			for _, address := range entry.AddrIPv6 {
+				log.Debug("mDNS hint", "IP", address.String())
 				channel <- address.String()
 			}
 		}
