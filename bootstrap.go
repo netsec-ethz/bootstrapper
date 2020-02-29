@@ -367,9 +367,9 @@ type DNSInfo struct {
 
 func doServiceDiscovery(channel chan string, resolver, domain string) {
 	query := discoveryServiceDNSName + "." + domain + "."
-	log.Debug("DNS-SD", "query", query, "rr", dns.TypeSRV, "resolver", resolver)
+	log.Debug("DNS-SD", "query", query, "rr", dns.TypePTR, "resolver", resolver)
 	now := time.Now().UnixNano()
-	resolveDNS(resolver, query, dns.TypeSRV, channel)
+	resolveDNS(resolver, query, dns.TypePTR, channel)
 	then := time.Now().UnixNano()
 	log.Debug("timing", "type", "dnssd", "value", (then - now))
 }
