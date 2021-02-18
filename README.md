@@ -35,8 +35,8 @@ server {
 
 You can test that the webserver is working with:
 
-- `curl ${SERVER_IP}:8041/scion/discovery/v1/topology.json`, and
-- `curl ${SERVER_IP}:8041/scion/discovery/v1/trcs.tar
+- `curl http://${SERVER_IP}:8041/scion/discovery/v1/topology.json`, and
+- `curl http://${SERVER_IP}:8041/scion/discovery/v1/trcs.tar`
 
 The former should return the topology of the AS.
 The latter should return an archive containing the served TRCs.
@@ -46,11 +46,14 @@ The latter should return an archive containing the served TRCs.
 ### DHCP (dnsmasq)
 
 For example, with `dnsmasq`, an option 72 "Default WWW server" can be done by
-adding the following line to `/etc/dnsmasq.conf`: `dhcp-option=72,<webserverIP>`
+adding the following line to `/etc/dnsmasq.conf`: `dhcp-option=72,<webserverIP>`.
+Note that `dnsmasq` does not support DHCP option 72 `www-server` by default,
+`https://thekelleys.org.uk/dnsmasq/docs/dnsmasq-man.html`, supported DHCP options are registered in `dhcp-common.c`.
+`dhcpd` supports the option by default, `https://github.com/koenning/isc-dhcpd/blob/master/common/tables.c`.
 
 ### mDNS (avahi)
 
-Put the following configuration to `/etc/avahi/services/sciondiscovery.xml`:
+Put the following configuration to `/etc/avahi/services/sciondiscovery.service`:
 
 ```xml
 <?xml version="1.0" standalone='no'?>
