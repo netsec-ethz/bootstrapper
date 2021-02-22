@@ -46,6 +46,7 @@ func getLocalDNSConfig() {
 		// "solaris": https://support.oracle.com/knowledge/Oracle%20Database%20Products/433870_1.html
 		// "zos": https://www.ibm.com/support/knowledgecenter/SSLTBW_2.3.0/com.ibm.zos.v2r3.halz002/resolver_srch_orders_unix_base.htm
 		log.Debug("Getting local DNS configuration from resolv.conf")
+		dnsInfo = getDNSConfigResolv()
 	case "windows":
 		// "windows": https://docs.microsoft.com/en-us/windows/win32/api/iphlpapi/nf-iphlpapi-getadaptersaddresses
 		log.Debug("Getting local DNS configuration from IP_ADAPTER_ADDRESSES")
