@@ -16,6 +16,7 @@ package hinting
 
 import (
 	"net"
+	"runtime"
 
 	"github.com/scionproto/scion/go/lib/log"
 )
@@ -30,7 +31,29 @@ type HintGenerator interface {
 
 func getLocalDNSConfig() {
 	var dnsInfo *DNSInfo
-	log.Debug("Getting local DNS configuration from resolv.conf")
+	switch runtime.GOOS {
+	case "linux", "darwin", "freebsd", "aix", "dragonfly", "hurd", "illumos", "netbsd", "openbsd", "solaris", "zos":
+		// "linux": https://wiki.debian.org/resolv.conf
+		// "darwin": https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/res_send.3.html
+		// "freebsd": https://docs.freebsd.org/en_US.ISO8859-1/books/handbook/configtuning-configfiles.html
+		// Untested:
+		// "aix": https://www.ibm.com/support/knowledgecenter/en/ssw_aix_71/filesreference/resolv.conf.html
+		// "dragonfly": https://leaf.dragonflybsd.org/cgi/web-man?command=resolvconf&section=8
+		// "hurd": https://www.gnu.org/software/hurd/users-guide/using_gnuhurd.html
+		// "illumos": https://illumos.org/man/4/resolv.conf
+		// "netbsd": https://man.netbsd.org/resolvconf.8
+		// "openbsd": https://man.openbsd.org/resolv.conf.5
+		// "solaris": https://support.oracle.com/knowledge/Oracle%20Database%20Products/433870_1.html
+		// "zos": https://www.ibm.com/support/knowledgecenter/SSLTBW_2.3.0/com.ibm.zos.v2r3.halz002/resolver_srch_orders_unix_base.htm
+		log.Debug("Getting local DNS configuration from resolv.conf")
+	case "windows":
+		// "windows": https://docs.microsoft.com/en-us/windows/win32/api/iphlpapi/nf-iphlpapi-getadaptersaddresses
+		log.Debug("Getting local DNS configuration from IP_ADAPTER_ADDRESSES")
+	default:
+		// "android": https://gist.github.com/ernesto-jimenez/8042366
+		// "plan": https://9p.io/wiki/plan9/Network_configuration/index.html
+		log.Debug("Cannot easily get local DNS configuration from OS.", "OS", runtime.GOOS)
+	}
 	if dnsInfo != nil {
 		dnsServersChan <- *dnsInfo
 	}
