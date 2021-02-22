@@ -1,4 +1,5 @@
 // Copyright 2020 Anapaya Systems
+// Copyright 2021 ETH Zurich
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -63,6 +64,7 @@ func (g *MDNSSDHintGenerator) Generate(ipHintsChan chan<- net.IP) {
 
 func handleEntries(entriesChan <-chan *zeroconf.ServiceEntry, ipHintsChan chan<- net.IP) {
 	for entry := range entriesChan {
+		log.Info("mDNS Got entry", "entry", entry)
 		for _, address := range entry.AddrIPv4 {
 			log.Info("mDNS hint", "IP", address.String())
 			ipHintsChan <- address
@@ -78,10 +80,14 @@ func handleEntries(entriesChan <-chan *zeroconf.ServiceEntry, ipHintsChan chan<-
 func discoverEntries(resolver *zeroconf.Resolver, entriesChan chan *zeroconf.ServiceEntry) {
 	ctx, cancel := context.WithTimeout(context.Background(), resolverTimeout)
 	defer cancel()
-	err := resolver.Browse(ctx, "_sciondiscovery._tcp", "local.", entriesChan)
-	if err != nil {
-		log.Error("mDNS could not lookup", "err", err)
-		return
+	go getLocalDNSConfig()
+	for dnsServer := range dnsServersChan {
+		for _, searchDomain := range dnsServer.searchDomains {
+			err := resolver.Browse(ctx, "_sciondiscovery._tcp", searchDomain, entriesChan)
+			if err != nil {
+				log.Error("mDNS could not lookup", "searchDomain", searchDomain, "err", err)
+			}
+		}
 	}
 	<-ctx.Done()
 }

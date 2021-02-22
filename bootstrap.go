@@ -1,4 +1,5 @@
 // Copyright 2020 Anapaya Systems
+// Copyright 2021 ETH Zurich
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -68,8 +69,9 @@ func (b *Bootstrapper) tryBootstrapping() error {
 	hintGenerators := []hinting.HintGenerator{
 		hinting.NewMockHintGenerator(&cfg.MOCK),
 		hinting.NewDHCPHintGenerator(&cfg.DHCP, b.iface),
-		// XXX: DNSSD depends on DHCP, should this be better enforced?
+		// XXX: DNS-SD depends on DNS resolution working, which can depend on DHCP for getting the local DNS resolver IP
 		hinting.NewDNSSDHintGenerator(&cfg.DNSSD),
+		// XXX: mDNS depends on the DNS search domain to be correct, which can depend on DHCP for getting it
 		hinting.NewMDNSHintGenerator(&cfg.MDNS, b.iface)}
 	for _, g := range hintGenerators {
 		go func(g hinting.HintGenerator) {
@@ -102,11 +104,12 @@ OuterLoop:
 
 func pullTopology(addr *net.TCPAddr) error {
 	url := buildTopologyURL(addr.IP, addr.Port)
-	log.Info("Fetching topology from " + url)
+	log.Info("Fetching topology", "url", url)
 	ctx, cancelF := context.WithTimeout(context.Background(), httpRequestTimeout)
 	defer cancelF()
 	r, err := fetchHTTP(ctx, url)
 	if err != nil {
+		log.Error("Failed to fetch topology from " + url, "err", err)
 		return err
 	}
 	defer func() {
@@ -143,6 +146,7 @@ func pullTRCs(addr *net.TCPAddr) error {
 	defer cancelF()
 	r, err := fetchHTTP(ctx, url)
 	if err != nil {
+		log.Error("Failed to fetch TRC from " + url, "err", err)
 		return err
 	}
 	// Close response reader and handle errors
@@ -168,15 +172,10 @@ func pullTRCs(addr *net.TCPAddr) error {
 				log.Error("Invalid TRC file name", "name", hdr.Name)
 				continue
 			}
-			log.Info("Extracting TRC", "name", trcName)
 			trcPath := path.Join(cfg.SciondConfigDir, "certs", trcName)
-			f, err := os.OpenFile(trcPath, os.O_CREATE|os.O_RDWR, 0644)
-			if err != nil {
-				return common.NewBasicError("error creating file to store TRC", err)
-			}
-			_, err = io.Copy(f, tr)
-			if err != nil {
-				return common.NewBasicError("error writing TRC file", err)
+			log.Info("Extracting TRC", "name", trcName, "destination", trcPath)
+			if err := writeTarEntry(trcPath, tr); err != nil {
+				return common.NewBasicError("Bootstrapper could not store TRC", err)
 			}
 		case tar.TypeDir:
 			return fmt.Errorf("TRCs archive must be composed of TRCs only, directory found")
@@ -184,6 +183,19 @@ func pullTRCs(addr *net.TCPAddr) error {
 			return fmt.Errorf("TRCs archive must be composed of TRCs only"+
 				", unknown type found: %c", hdr.Typeflag)
 		}
+	}
+	return nil
+}
+
+func writeTarEntry(trcPath string, tr *tar.Reader) error {
+	f, err := os.OpenFile(trcPath, os.O_CREATE|os.O_RDWR, 0644)
+	defer f.Close()
+	if err != nil {
+		return common.NewBasicError("error creating file to store TRC", err)
+	}
+	_, err = io.Copy(f, tr)
+	if err != nil {
+		return common.NewBasicError("error writing TRC file", err)
 	}
 	return nil
 }

@@ -1,4 +1,5 @@
 // Copyright 2020 Anapaya Systems
+// Copyright 2021 ETH Zurich
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,16 +16,12 @@
 package hinting
 
 import (
-	"fmt"
 	"math/rand"
 	"net"
-	"os"
 	"sort"
-	"strings"
 
 	"github.com/miekg/dns"
 
-	"github.com/scionproto/scion/go/lib/common"
 	"github.com/scionproto/scion/go/lib/log"
 )
 
@@ -36,6 +33,11 @@ const (
 var (
 	dnsServersChan = make(chan DNSInfo)
 )
+
+type DNSInfo struct {
+	resolvers     []string
+	searchDomains []string
+}
 
 type DNSHintGeneratorConf struct {
 	EnableSD    bool `toml:"enable_sd"`
@@ -55,14 +57,12 @@ func NewDNSSDHintGenerator(cfg *DNSHintGeneratorConf) *DNSSDHintGenerator {
 }
 
 func (g *DNSSDHintGenerator) Generate(ipHintsChan chan<- net.IP) {
+	if !g.cfg.EnableSRV && !g.cfg.EnableSD && !g.cfg.EnableNAPTR {
+		return
+	}
+	go getLocalDNSConfig()
 	for dnsServer := range dnsServersChan {
-		localDomainName, err := getDomainName()
-		if err != nil {
-			log.Error("Error retrieving local domain name", "err", err)
-		} else {
-			dnsServer.searchDomains = append(dnsServer.searchDomains, localDomainName)
-		}
-
+		log.Info("Using following resolvers for DNS hinting", "resolvers", dnsServer.resolvers)
 		for _, resolver := range dnsServer.resolvers {
 			for _, domain := range dnsServer.searchDomains {
 				if g.cfg.EnableSRV {
@@ -81,11 +81,6 @@ func (g *DNSSDHintGenerator) Generate(ipHintsChan chan<- net.IP) {
 		}
 	}
 	log.Info("DNS hinting done")
-}
-
-type DNSInfo struct {
-	resolvers     []string
-	searchDomains []string
 }
 
 func getDNSSDQuery(resolver, domain string) string {
@@ -118,7 +113,7 @@ func resolveDNS(resolver, query string, dnsRR uint16, ipHintsChan chan<- net.IP)
 		switch answer.(type) {
 		case *dns.PTR:
 			result := *(answer.(*dns.PTR))
-			resolveDNS(resolver, result.Ptr, dns.TypeSRV, ipHintsChan)
+			resolveDNS(resolver, result.Ptr, dns.TypeSRV, ipHintsChan) // XXX: Set max recursion depth
 		case *dns.NAPTR:
 			result := *(answer.(*dns.NAPTR))
 			if result.Service == discoveryDDDSDNSName {
@@ -146,6 +141,7 @@ func resolveDNS(resolver, query string, dnsRR uint16, ipHintsChan chan<- net.IP)
 	if len(serviceRecords) > 0 {
 		sort.Sort(byPriority(serviceRecords))
 
+		log.Info("DNS Resolving service records", "serviceRecords", serviceRecords)
 		for _, answer := range serviceRecords {
 			resolveDNS(resolver, answer.Target, dns.TypeAAAA, ipHintsChan)
 			resolveDNS(resolver, answer.Target, dns.TypeA, ipHintsChan)
@@ -155,6 +151,7 @@ func resolveDNS(resolver, query string, dnsRR uint16, ipHintsChan chan<- net.IP)
 	if len(naptrRecords) > 0 {
 		sort.Sort(byOrder(naptrRecords))
 
+		log.Info("DNS Resolving NAPTR records", "serviceRecords", naptrRecords)
 		for _, answer := range naptrRecords {
 			switch answer.Flags {
 			case "":
@@ -167,20 +164,6 @@ func resolveDNS(resolver, query string, dnsRR uint16, ipHintsChan chan<- net.IP)
 			}
 		}
 	}
-}
-
-func getDomainName() (string, error) {
-	hostname, err := os.Hostname()
-	if err != nil {
-		return "", common.NewBasicError("could not get hostname", err)
-	}
-	split := strings.SplitAfterN(hostname, ".", 2)
-	if len(split) < 2 {
-		return "", fmt.Errorf("could not get domain name, hostname: %s, split: %s", hostname, split)
-	} else {
-		log.Info("Bootstrapper", "domain", split[1])
-	}
-	return split[1], nil
 }
 
 // Order as defined by DNS-SD RFC

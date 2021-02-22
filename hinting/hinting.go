@@ -1,4 +1,4 @@
-// Copyright 2020 Anapaya Systems
+// Copyright 2021 ETH Zurich
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,15 @@ const (
 
 type HintGenerator interface {
 	Generate(chan<- net.IP)
+}
+
+func getLocalDNSConfig() {
+	var dnsInfo *DNSInfo
+	log.Debug("Getting local DNS configuration from resolv.conf")
+	if dnsInfo != nil {
+		dnsServersChan <- *dnsInfo
+	}
+	return
 }
 
 type MOCKHintGeneratorConf struct {
