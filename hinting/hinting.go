@@ -50,6 +50,7 @@ func getLocalDNSConfig() {
 	case "windows":
 		// "windows": https://docs.microsoft.com/en-us/windows/win32/api/iphlpapi/nf-iphlpapi-getadaptersaddresses
 		log.Debug("Getting local DNS configuration from IP_ADAPTER_ADDRESSES")
+		dnsInfo = getDNSConfigIPHlpAPI()
 	default:
 		// "android": https://gist.github.com/ernesto-jimenez/8042366
 		// "plan": https://9p.io/wiki/plan9/Network_configuration/index.html
