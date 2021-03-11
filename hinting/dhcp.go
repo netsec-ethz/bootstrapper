@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// +build !windows
+
 package hinting
 
 import (
@@ -42,6 +44,9 @@ func NewDHCPHintGenerator(cfg *DHCPHintGeneratorConf, iface *net.Interface) *DHC
 }
 
 func (g *DHCPHintGenerator) Generate(ipHintsChan chan<- net.IP) {
+	if !g.cfg.Enable {
+		return
+	}
 	log.Info("DHCP Probing", "interface", g.iface.Name)
 	p, err := g.createDHCPRequest()
 	if err != nil {
