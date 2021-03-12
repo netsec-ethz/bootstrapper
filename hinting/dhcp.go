@@ -13,15 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build !windows
-
 package hinting
 
 import (
+	"encoding/binary"
+	"fmt"
 	"net"
 
 	"github.com/insomniacslk/dhcp/dhcpv4"
-	"github.com/insomniacslk/dhcp/dhcpv4/client4"
 	"github.com/insomniacslk/dhcp/rfc1035label"
 
 	"github.com/scionproto/scion/go/lib/common"
@@ -76,24 +75,6 @@ func (g *DHCPHintGenerator) createDHCPRequest() (*dhcpv4.DHCPv4, error) {
 		return nil, common.NewBasicError("DHCP hinter failed to build network packet", err)
 	}
 	return p, nil
-}
-
-func (g *DHCPHintGenerator) sendReceive(p *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, error) {
-	p.SetBroadcast()
-	client := client4.NewClient()
-	sender, err := client4.MakeBroadcastSocket(g.iface.Name)
-	if err != nil {
-		return nil, common.NewBasicError("DHCP hinter failed to open broadcast sender socket", err)
-	}
-	receiver, err := client4.MakeListeningSocket(g.iface.Name)
-	if err != nil {
-		return nil, common.NewBasicError("DHCP hinter failed to open receiver socket", err)
-	}
-	ack, err := client.SendReceive(sender, receiver, p, dhcpv4.MessageTypeAck)
-	if err != nil {
-		return nil, common.NewBasicError("DHCP hinter failed to send inform request", err)
-	}
-	return ack, nil
 }
 
 func (g *DHCPHintGenerator) dispatchIPHints(ack *dhcpv4.DHCPv4, ipHintChan chan<- net.IP) {
