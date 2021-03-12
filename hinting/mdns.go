@@ -45,7 +45,7 @@ func NewMDNSHintGenerator(cfg *MDNSHintGeneratorConf, iface *net.Interface) *MDN
 	return &MDNSSDHintGenerator{cfg, iface}
 }
 
-func (g *MDNSSDHintGenerator) Generate(ipHintsChan chan<- net.IP) {
+func (g *MDNSSDHintGenerator) Generate(ipHintsChan chan<- net.TCPAddr) {
 	if !g.cfg.Enable {
 		return
 	}
@@ -62,16 +62,18 @@ func (g *MDNSSDHintGenerator) Generate(ipHintsChan chan<- net.IP) {
 	discoverEntries(resolver, entriesChan)
 }
 
-func handleEntries(entriesChan <-chan *zeroconf.ServiceEntry, ipHintsChan chan<- net.IP) {
+func handleEntries(entriesChan <-chan *zeroconf.ServiceEntry, ipHintsChan chan<- net.TCPAddr) {
 	for entry := range entriesChan {
 		log.Info("mDNS Got entry", "entry", entry)
-		for _, address := range entry.AddrIPv4 {
-			log.Info("mDNS hint", "IP", address.String())
-			ipHintsChan <- address
+		for _, ip := range entry.AddrIPv4 {
+			addr := net.TCPAddr{IP: ip, Port: entry.Port}
+			log.Info("mDNS hint", "Addr", addr)
+			ipHintsChan <- addr
 		}
-		for _, address := range entry.AddrIPv6 {
-			log.Info("mDNS hint", "IP", address.String())
-			ipHintsChan <- address
+		for _, ip := range entry.AddrIPv6 {
+			addr := net.TCPAddr{IP: ip, Port: entry.Port}
+			log.Info("mDNS hint", "Addr", addr)
+			ipHintsChan <- addr
 		}
 	}
 	log.Info("mDNS hinting done")

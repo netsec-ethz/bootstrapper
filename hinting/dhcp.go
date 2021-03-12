@@ -42,7 +42,7 @@ func NewDHCPHintGenerator(cfg *DHCPHintGeneratorConf, iface *net.Interface) *DHC
 	return &DHCPHintGenerator{cfg, iface}
 }
 
-func (g *DHCPHintGenerator) Generate(ipHintsChan chan<- net.IP) {
+func (g *DHCPHintGenerator) Generate(ipHintsChan chan<- net.TCPAddr) {
 	if !g.cfg.Enable {
 		return
 	}
@@ -78,14 +78,14 @@ func (g *DHCPHintGenerator) createDHCPRequest() (*dhcpv4.DHCPv4, error) {
 	return p, nil
 }
 
-func (g *DHCPHintGenerator) dispatchIPHints(ack *dhcpv4.DHCPv4, ipHintChan chan<- net.IP) {
+func (g *DHCPHintGenerator) dispatchIPHints(ack *dhcpv4.DHCPv4, ipHintChan chan<- net.TCPAddr) {
 	if !g.cfg.Enable {
 		return
 	}
 	ips := dhcpv4.GetIPs(dhcpv4.OptionDefaultWorldWideWebServer, ack.Options)
 	for _, ip := range ips {
 		log.Info("DHCP hint", "IP", ip)
-		ipHintChan <- ip
+		ipHintChan <- net.TCPAddr{IP: ip}
 	}
 	VIVSBytes := ack.GetOneOption(dhcpv4.OptionVendorIdentifyingVendorSpecific)
 	dataLen := len(VIVSBytes)
@@ -95,9 +95,9 @@ func (g *DHCPHintGenerator) dispatchIPHints(ack *dhcpv4.DHCPv4, ipHintChan chan<
 			log.Error("Failed to parse Vendor Identifying Vendor Specific Option", "err", err)
 			return
 		}
-		_ = port
-		log.Info("DHCP vi-encap hint", "IP", ip)
-		ipHintChan <- ip
+		addr := net.TCPAddr{IP: ip, Port: port}
+		log.Info("DHCP vi-encap hint", "Addr", addr)
+		ipHintChan <- addr
 	}
 }
 

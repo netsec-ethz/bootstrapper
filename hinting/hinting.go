@@ -26,7 +26,7 @@ const (
 )
 
 type HintGenerator interface {
-	Generate(chan<- net.IP)
+	Generate(chan<- net.TCPAddr)
 }
 
 func getLocalDNSConfig() {
@@ -77,14 +77,14 @@ func NewMockHintGenerator(cfg *MOCKHintGeneratorConf) *MockHintGenerator {
 	return &MockHintGenerator{cfg}
 }
 
-func (m *MockHintGenerator) Generate(ipHintsChan chan<- net.IP) {
+func (m *MockHintGenerator) Generate(ipHintsChan chan<- net.TCPAddr) {
 	if !m.cfg.Enable {
 		return
 	}
-	ip := net.ParseIP(m.cfg.Address)
-	if ip == nil {
-		log.Error("Invalid IP Address for mock generator", "ip", ip)
-	} else {
-		ipHintsChan <- ip
+	tcpAddr, err := net.ResolveTCPAddr("tcp", m.cfg.Address)
+	if err != nil {
+		log.Error("Invalid IP:port for mock generator", "value", m.cfg.Address)
+		return
 	}
+	ipHintsChan <- *tcpAddr
 }

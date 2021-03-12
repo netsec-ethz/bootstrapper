@@ -19,6 +19,7 @@ import (
 	"math/rand"
 	"net"
 	"sort"
+	"strconv"
 
 	"github.com/miekg/dns"
 
@@ -56,7 +57,7 @@ func NewDNSSDHintGenerator(cfg *DNSHintGeneratorConf) *DNSSDHintGenerator {
 	return &DNSSDHintGenerator{cfg}
 }
 
-func (g *DNSSDHintGenerator) Generate(ipHintsChan chan<- net.IP) {
+func (g *DNSSDHintGenerator) Generate(ipHintsChan chan<- net.TCPAddr) {
 	if !g.cfg.EnableSRV && !g.cfg.EnableSD && !g.cfg.EnableNAPTR {
 		return
 	}
@@ -67,15 +68,15 @@ func (g *DNSSDHintGenerator) Generate(ipHintsChan chan<- net.IP) {
 			for _, domain := range dnsServer.searchDomains {
 				if g.cfg.EnableSRV {
 					query := getDNSSDQuery(resolver, domain)
-					resolveDNS(resolver, query, dns.TypeSRV, ipHintsChan)
+					resolveDNS(resolver, query, 0, dns.TypeSRV, ipHintsChan)
 				}
 				if g.cfg.EnableSD {
 					query := getDNSSDQuery(resolver, domain)
-					resolveDNS(resolver, query, dns.TypePTR, ipHintsChan)
+					resolveDNS(resolver, query, 0, dns.TypePTR, ipHintsChan)
 				}
 				if g.cfg.EnableNAPTR {
 					query := getDNSNAPTRQuery(resolver, domain)
-					resolveDNS(resolver, query, dns.TypeNAPTR, ipHintsChan)
+					resolveDNS(resolver, query, 0, dns.TypeNAPTR, ipHintsChan)
 				}
 			}
 		}
@@ -96,7 +97,7 @@ func getDNSNAPTRQuery(resolver, domain string) string {
 	return query
 }
 
-func resolveDNS(resolver, query string, dnsRR uint16, ipHintsChan chan<- net.IP) {
+func resolveDNS(resolver, query string, resultPort uint16, dnsRR uint16, ipHintsChan chan<- net.TCPAddr) {
 	msg := new(dns.Msg)
 	msg.SetQuestion(query, dnsRR)
 	msg.RecursionDesired = true
@@ -113,28 +114,28 @@ func resolveDNS(resolver, query string, dnsRR uint16, ipHintsChan chan<- net.IP)
 		switch answer.(type) {
 		case *dns.PTR:
 			result := *(answer.(*dns.PTR))
-			resolveDNS(resolver, result.Ptr, dns.TypeSRV, ipHintsChan) // XXX: Set max recursion depth
+			resolveDNS(resolver, result.Ptr, resultPort, dns.TypeSRV, ipHintsChan) // XXX: Set max recursion depth
 		case *dns.NAPTR:
 			result := *(answer.(*dns.NAPTR))
 			if result.Service == discoveryDDDSDNSName {
 				naptrRecords = append(naptrRecords, result)
+				if resultPort == 0 {
+					resultPort = queryTXTPortRecord(resolver, query)
+				}
 			}
 		case *dns.SRV:
 			result := *(answer.(*dns.SRV))
-			// TODO: Should we really consider different ports an error?
-			if result.Port != DiscoveryPort {
-				log.Error("DNS announced invalid discovery port",
-					"expected", DiscoveryPort, "actual", result.Port)
-			}
 			serviceRecords = append(serviceRecords, result)
 		case *dns.A:
 			result := *(answer.(*dns.A))
-			log.Info("DNS hint", "IP", result.A.String())
-			ipHintsChan <- result.A
+			addr := net.TCPAddr{IP: result.A, Port: int(resultPort)}
+			log.Info("DNS hint", "Addr", addr)
+			ipHintsChan <- addr
 		case *dns.AAAA:
 			result := *(answer.(*dns.AAAA))
-			log.Info("DNS hint", "IP", result.AAAA.String())
-			ipHintsChan <- result.AAAA
+			addr := net.TCPAddr{IP: result.AAAA, Port: int(resultPort)}
+			log.Info("DNS hint", "Addr", addr)
+			ipHintsChan <- addr
 		}
 	}
 
@@ -143,8 +144,8 @@ func resolveDNS(resolver, query string, dnsRR uint16, ipHintsChan chan<- net.IP)
 
 		log.Info("DNS Resolving service records", "serviceRecords", serviceRecords)
 		for _, answer := range serviceRecords {
-			resolveDNS(resolver, answer.Target, dns.TypeAAAA, ipHintsChan)
-			resolveDNS(resolver, answer.Target, dns.TypeA, ipHintsChan)
+			resolveDNS(resolver, answer.Target, answer.Port, dns.TypeAAAA, ipHintsChan)
+			resolveDNS(resolver, answer.Target, answer.Port, dns.TypeA, ipHintsChan)
 		}
 	}
 
@@ -155,15 +156,42 @@ func resolveDNS(resolver, query string, dnsRR uint16, ipHintsChan chan<- net.IP)
 		for _, answer := range naptrRecords {
 			switch answer.Flags {
 			case "":
-				resolveDNS(resolver, answer.Replacement, dns.TypeNAPTR, ipHintsChan)
+				resolveDNS(resolver, answer.Replacement, resultPort, dns.TypeNAPTR, ipHintsChan)
 			case "A":
-				resolveDNS(resolver, answer.Replacement, dns.TypeAAAA, ipHintsChan)
-				resolveDNS(resolver, answer.Replacement, dns.TypeA, ipHintsChan)
+				resolveDNS(resolver, answer.Replacement, resultPort, dns.TypeAAAA, ipHintsChan)
+				resolveDNS(resolver, answer.Replacement, resultPort, dns.TypeA, ipHintsChan)
 			case "S":
-				resolveDNS(resolver, answer.Replacement, dns.TypeSRV, ipHintsChan)
+				resolveDNS(resolver, answer.Replacement, resultPort, dns.TypeSRV, ipHintsChan)
 			}
 		}
 	}
+}
+
+func queryTXTPortRecord(resolver, query string) (resultPort uint16) {
+	msg := new(dns.Msg)
+	msg.SetQuestion(query, dns.TypeTXT)
+	msg.RecursionDesired = false
+	res, err := dns.Exchange(msg, resolver+":53")
+	if err != nil {
+		log.Error("DNS-SD failed to resolve TXT record for S-NAPTR", "err", err)
+	}
+	for _, ans := range res.Answer {
+		if txtRecords, ok := ans.(*dns.TXT); ok {
+			for _, txt := range txtRecords.Txt {
+				port, err := strconv.ParseInt(txt, 10, 16)
+				if err != nil {
+					log.Error("DNS-SD failed to convert TXT record to a valid port", "err", err)
+					continue
+				}
+				resultPort = uint16(port)
+				break
+			}
+		}
+		if resultPort != 0 {
+			break
+		}
+	}
+	return
 }
 
 // Order as defined by DNS-SD RFC

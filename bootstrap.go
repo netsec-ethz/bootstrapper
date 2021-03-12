@@ -49,8 +49,8 @@ const (
 type Bootstrapper struct {
 	cfg   *config.Config
 	iface *net.Interface
-	// ipHintsChan is used to inform the bootstrapper about discovered ip hints
-	ipHintsChan chan net.IP
+	// ipHintsChan is used to inform the bootstrapper about discovered IP:port hints
+	ipHintsChan chan net.TCPAddr
 }
 
 func NewBootstrapper(cfg *config.Config) (*Bootstrapper, error) {
@@ -62,7 +62,7 @@ func NewBootstrapper(cfg *config.Config) (*Bootstrapper, error) {
 	return &Bootstrapper{
 		cfg,
 		iface,
-		make(chan net.IP)}, nil
+		make(chan net.TCPAddr)}, nil
 }
 
 func (b *Bootstrapper) tryBootstrapping() error {
@@ -85,7 +85,10 @@ OuterLoop:
 	for {
 		select {
 		case ipAddr := <-b.ipHintsChan:
-			serverAddr := &net.TCPAddr{IP: ipAddr, Port: int(hinting.DiscoveryPort)}
+			serverAddr := &ipAddr
+			if serverAddr.Port == 0 {
+				serverAddr.Port = int(hinting.DiscoveryPort)
+			}
 			err := pullTopology(serverAddr)
 			if err != nil {
 				return err
