@@ -42,11 +42,11 @@ func getDNSConfigResolv() (dnsInfo *DNSInfo) {
 	scanner := bufio.NewScanner(fd)
 	for scanner.Scan() {
 		line := scanner.Text()
-		if  line == "" {
+		if line == "" {
 			// empty line
 			continue
 		}
-		if strings.HasPrefix(line, ";") ||  strings.HasPrefix(line, "#") {
+		if strings.HasPrefix(line, ";") || strings.HasPrefix(line, "#") {
 			// comment
 			continue
 		}

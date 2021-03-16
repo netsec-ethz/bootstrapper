@@ -28,7 +28,7 @@ func getDNSConfigIPHlpAPI() (dnsInfo *DNSInfo) {
 	// Sample code uses 15000, we expect the reply to fit in 20 entries
 	size := uint32(unsafe.Sizeof(windows.IpAdapterAddresses{}) * 20)
 	var ias []byte
-	for i:= 0; i < 3; i += 1 {
+	for i := 0; i < 3; i += 1 {
 		ias = make([]byte, size)
 		errcode := windows.GetAdaptersAddresses(windows.AF_UNSPEC, flags, 0,
 			(*windows.IpAdapterAddresses)(unsafe.Pointer(&ias[0])), &size)
@@ -72,7 +72,7 @@ func getDNSConfigIPHlpAPI() (dnsInfo *DNSInfo) {
 
 func getDNSConfigResolv() (dnsInfo *DNSInfo) {
 	log.Error("IP Helper API not supported on current OS", "err",
-		errors.New("only reading from IP_ADAPTER_ADDRESSES is implemented for this OS," +
+		errors.New("only reading from IP_ADAPTER_ADDRESSES is implemented for this OS,"+
 			" use getDNSConfigIPHlpAPI to get local DNS config"))
 	return nil
 }

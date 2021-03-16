@@ -16,16 +16,14 @@
 package main
 
 import (
-	"archive/tar"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
-	"os"
 	"path"
-	"path/filepath"
 	"time"
 
 	"golang.org/x/net/context/ctxhttp"
@@ -35,12 +33,14 @@ import (
 	"github.com/scionproto/scion/go/lib/common"
 	"github.com/scionproto/scion/go/lib/log"
 	"github.com/scionproto/scion/go/lib/topology"
+	//"github.com/scionproto/scion/go/pkg/cs/api"
 )
 
 const (
-	baseURL              = "scion/discovery/v1"
-	topologyEndpoint     = "/topology.json"
-	TRCsEndpoint         = "/trcs.tar"
+	baseURL              = ""
+	topologyEndpoint     = "topology"
+	TRCsEndpoint         = "trcs"
+	TRCBlobEndpoint      = "trcs/isd%d-b%d-s%d/blob"
 	TopologyJSONFileName = "topology.json"
 	httpRequestTimeout   = 2 * time.Second
 	hintsTimeout         = 10 * time.Second
@@ -112,7 +112,7 @@ func pullTopology(addr *net.TCPAddr) error {
 	defer cancelF()
 	r, err := fetchHTTP(ctx, url)
 	if err != nil {
-		log.Error("Failed to fetch topology from " + url, "err", err)
+		log.Error("Failed to fetch topology from "+url, "err", err)
 		return err
 	}
 	defer func() {
@@ -142,6 +142,20 @@ func buildTopologyURL(ip net.IP, port int) string {
 	return fmt.Sprintf("http://%s:%d/%s", ip, port, urlPath)
 }
 
+// github.com/scionproto/scion/spec/control/trust.yml
+
+// TRCBrief defines model for TRCBrief.
+type TRCBrief struct {
+	Id TRCID `json:"id"`
+}
+
+// TRCID defines model for TRCID.
+type TRCID struct {
+	BaseNumber   int `json:"base_number"`
+	Isd          int `json:"isd"`
+	SerialNumber int `json:"serial_number"`
+}
+
 func pullTRCs(addr *net.TCPAddr) error {
 	url := buildTRCsURL(addr.IP, addr.Port)
 	log.Info("Fetching TRCs", "url", url)
@@ -149,7 +163,7 @@ func pullTRCs(addr *net.TCPAddr) error {
 	defer cancelF()
 	r, err := fetchHTTP(ctx, url)
 	if err != nil {
-		log.Error("Failed to fetch TRC from " + url, "err", err)
+		log.Error("Failed to fetch TRCs from "+url, "err", err)
 		return err
 	}
 	// Close response reader and handle errors
@@ -158,47 +172,21 @@ func pullTRCs(addr *net.TCPAddr) error {
 			log.Error("Error closing the body of the TRCs response", "err", err)
 		}
 	}()
-	// Extract TRCs tar archive
-	tr := tar.NewReader(r)
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
+	raw, err := ioutil.ReadAll(r)
+	if err != nil {
+		return common.NewBasicError("Unable to read from response body", err)
+	}
+	// Get TRC identifiers
+	trcs := []TRCBrief{}
+	err = json.Unmarshal(raw, &trcs)
+	if err != nil {
+		return common.NewBasicError("unable to parse TRCs listing from JSON bytes", err)
+	}
+	for _, trc := range trcs {
+		err = pullTRC(addr, trc.Id)
 		if err != nil {
-			return common.NewBasicError("error reading tar archive", err)
+			log.Error("Failed to retrieve TRC", "trc", trc, "err", err)
 		}
-		switch hdr.Typeflag {
-		case tar.TypeReg:
-			trcName := filepath.Base(hdr.Name)
-			if trcName == "." {
-				log.Error("Invalid TRC file name", "name", hdr.Name)
-				continue
-			}
-			trcPath := path.Join(cfg.SciondConfigDir, "certs", trcName)
-			log.Info("Extracting TRC", "name", trcName, "destination", trcPath)
-			if err := writeTarEntry(trcPath, tr); err != nil {
-				return common.NewBasicError("Bootstrapper could not store TRC", err)
-			}
-		case tar.TypeDir:
-			return fmt.Errorf("TRCs archive must be composed of TRCs only, directory found")
-		default:
-			return fmt.Errorf("TRCs archive must be composed of TRCs only"+
-				", unknown type found: %c", hdr.Typeflag)
-		}
-	}
-	return nil
-}
-
-func writeTarEntry(trcPath string, tr *tar.Reader) error {
-	f, err := os.OpenFile(trcPath, os.O_CREATE|os.O_RDWR, 0644)
-	defer f.Close()
-	if err != nil {
-		return common.NewBasicError("error creating file to store TRC", err)
-	}
-	_, err = io.Copy(f, tr)
-	if err != nil {
-		return common.NewBasicError("error writing TRC file", err)
 	}
 	return nil
 }
@@ -206,6 +194,40 @@ func writeTarEntry(trcPath string, tr *tar.Reader) error {
 func buildTRCsURL(ip net.IP, port int) string {
 	urlPath := baseURL + TRCsEndpoint
 	return fmt.Sprintf("http://%s:%d/%s", ip, port, urlPath)
+}
+
+func pullTRC(addr *net.TCPAddr, trcID TRCID) error {
+	url := buildTRCURL(addr.IP, addr.Port, trcID)
+	log.Info("Fetching TRC", "url", url)
+	ctx, cancelF := context.WithTimeout(context.Background(), httpRequestTimeout)
+	defer cancelF()
+	r, err := fetchHTTP(ctx, url)
+	if err != nil {
+		log.Error("Failed to fetch TRC from "+url, "err", err)
+		return err
+	}
+	defer func() {
+		if err := r.Close(); err != nil {
+			log.Error("Error closing the body of the TRC response", "err", err)
+		}
+	}()
+	raw, err := ioutil.ReadAll(r)
+	if err != nil {
+		return common.NewBasicError("Unable to read from response body", err)
+	}
+	trcPath := path.Join(cfg.SciondConfigDir, "certs",
+		fmt.Sprintf("ISD%d-B%d-S%d.trc", trcID.Isd, trcID.BaseNumber, trcID.SerialNumber))
+	err = ioutil.WriteFile(trcPath, raw, 0644)
+	if err != nil {
+		return common.NewBasicError("Bootstrapper could not store TRC", err)
+	}
+	return nil
+}
+
+func buildTRCURL(ip net.IP, port int, trc TRCID) string {
+	urlPath := baseURL + TRCBlobEndpoint
+	uri := fmt.Sprintf("http://%s:%d/", ip, port) + urlPath
+	return fmt.Sprintf(uri, trc.Isd, trc.BaseNumber, trc.SerialNumber)
 }
 
 func fetchHTTP(ctx context.Context, url string) (io.ReadCloser, error) {

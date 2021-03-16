@@ -53,8 +53,8 @@ func (g *DHCPHintGenerator) sendReceive(p *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, error
 // "github.com/insomniacslk/dhcp/client4/client.go"
 var (
 	// Use same defaults as on linux
-	defaultReadTimeout = 3 * time.Second
-	defaultWriteTimeout = 3 * time.Second
+	defaultReadTimeout       = 3 * time.Second
+	defaultWriteTimeout      = 3 * time.Second
 	maxUDPReceivedPacketSize = 8192
 )
 
