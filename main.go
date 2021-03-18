@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/scionproto/scion/go/bootstrapper/config"
+	"github.com/netsec-ethz/bootstrapper/config"
 	libconfig "github.com/scionproto/scion/go/lib/config"
 	"github.com/scionproto/scion/go/lib/env"
 	"github.com/scionproto/scion/go/lib/fatal"

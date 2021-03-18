@@ -28,8 +28,8 @@ import (
 
 	"golang.org/x/net/context/ctxhttp"
 
-	"github.com/scionproto/scion/go/bootstrapper/config"
-	"github.com/scionproto/scion/go/bootstrapper/hinting"
+	"github.com/netsec-ethz/bootstrapper/config"
+	"github.com/netsec-ethz/bootstrapper/hinting"
 	"github.com/scionproto/scion/go/lib/common"
 	"github.com/scionproto/scion/go/lib/log"
 	"github.com/scionproto/scion/go/lib/topology"
