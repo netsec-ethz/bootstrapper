@@ -52,7 +52,7 @@ func (g *DHCPHintGenerator) Generate(ipHintsChan chan<- net.TCPAddr) {
 		log.Error("Error creating DHCP request", "err", err)
 		return
 	}
-	ack, err := g.sendReceive(p)
+	ack, err := g.sendReceive(p, g.iface.Name)
 	if err != nil {
 		log.Error("Error creating sending/receiving DHCP request/response", "err", err)
 		return

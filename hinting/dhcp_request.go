@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build !windows
+// +build linux
 
 // Package github.com/insomniacslk/dhcp/client4 has u-root as dependency, which does not support windows,
 
@@ -25,7 +25,7 @@ import (
 	"github.com/scionproto/scion/go/lib/common"
 )
 
-func (g *DHCPHintGenerator) sendReceive(p *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, error) {
+func (g *DHCPHintGenerator) sendReceive(p *dhcpv4.DHCPv4, ifname string) (*dhcpv4.DHCPv4, error) {
 	p.SetBroadcast()
 	client := client4.NewClient()
 	sender, err := client4.MakeBroadcastSocket(g.iface.Name)

@@ -12,25 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// +build !windows
+// +build !linux
+
 package hinting
 
 import (
 	"encoding/binary"
-	"fmt"
+	"errors"
 	"net"
-	"syscall"
 	"time"
-
-	"golang.org/x/net/ipv4"
-	"golang.org/x/sys/windows"
 
 	"github.com/insomniacslk/dhcp/dhcpv4"
 	"github.com/scionproto/scion/go/lib/common"
+	"golang.org/x/net/ipv4"
+	"golang.org/x/sys/unix"
 )
 
 func (g *DHCPHintGenerator) sendReceive(p *dhcpv4.DHCPv4, ifname string) (*dhcpv4.DHCPv4, error) {
 	p.SetBroadcast()
-	sender, err := makeBroadcastSocket()
+	sender, err := makeBroadcastSocket(ifname)
 	if err != nil {
 		return nil, common.NewBasicError("DHCP hinter failed to open broadcast sender socket", err)
 	}
@@ -47,70 +48,57 @@ func (g *DHCPHintGenerator) sendReceive(p *dhcpv4.DHCPv4, ifname string) (*dhcpv
 	return ack, nil
 }
 
-// Package github.com/insomniacslk/dhcp/client4 has u-root as dependency, which does not support windows,
-// including the changes required to broadcast send and receive on windows.
+// Package github.com/insomniacslk/dhcp/client4 uses unix.AF_PACKET, which is not supported on various *nixes,
+// including the changes required to broadcast send and receive on those.
 
 // "github.com/insomniacslk/dhcp/client4/client.go"
 var (
 	// Use same defaults as on linux
 	defaultReadTimeout       = 3 * time.Second
-	defaultWriteTimeout      = 3 * time.Second
 	maxUDPReceivedPacketSize = 8192
 )
 
-func makeBroadcastSocket() (*ipv4.RawConn, error) {
-	ipConn, err := net.ListenIP("ip:udp", nil)
-	if err != nil {
-		return nil, err
-	}
-	rawConn, err := ipv4.NewRawConn(ipConn)
-	if err != nil {
-		return nil, err
-	}
-
-	sysconn, err := rawConn.SyscallConn()
-	if err != nil {
-		return nil, err
-	}
-	// https://github.com/wine-mirror/wine/blob/master/include/ws2ipdef.h
-	IP_HDRINCL := 2
-	err2 := sysconn.Control(func(fd uintptr) {
-		err = windows.SetsockoptInt(windows.Handle(fd), windows.SOL_SOCKET, windows.SO_REUSEADDR, 1)
-		if err != nil {
-			return
-		}
-		err = windows.SetsockoptInt(windows.Handle(fd), windows.IPPROTO_IP, IP_HDRINCL, 1)
-		if err != nil {
-			return
-		}
-		err = windows.SetsockoptInt(windows.Handle(fd), windows.SOL_SOCKET, windows.SO_BROADCAST, 1)
-		if err != nil {
-			return
-		}
-	})
-	if err2 != nil {
-		return nil, err2
-	}
-	if err != nil {
-		return nil, err
-	}
-	return rawConn, nil
+func htons(v uint16) uint16 {
+	var tmp [2]byte
+	binary.BigEndian.PutUint16(tmp[:], v)
+	return binary.LittleEndian.Uint16(tmp[:])
 }
 
-func makeListeningSocket() (*ipv4.RawConn, error) {
-	listenAddr := net.IPAddr{IP: net.IPv4zero}
-	ipConn, err := net.ListenIP("ip:udp", &listenAddr)
+func makeBroadcastSocket(ifname string) (int, error) {
+	fd, err := unix.Socket(unix.AF_INET, unix.SOCK_RAW, unix.IPPROTO_RAW)
 	if err != nil {
-		return nil, err
+		return fd, err
 	}
-	rawConn, err := ipv4.NewRawConn(ipConn)
+	err = unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_REUSEADDR, 1)
 	if err != nil {
-		return nil, err
+		return fd, err
 	}
-	return rawConn, nil
+	err = unix.SetsockoptInt(fd, unix.IPPROTO_IP, unix.IP_HDRINCL, 1)
+	if err != nil {
+		return fd, err
+	}
+	err = dhcpv4.BindToInterface(fd, ifname)
+	if err != nil {
+		return fd, err
+	}
+	err = unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_BROADCAST, 1)
+	return fd, err
 }
 
-func sendReceive(sendFd, recvFd *ipv4.RawConn, raddr, laddr *net.UDPAddr, packet *dhcpv4.DHCPv4, messageType dhcpv4.MessageType) (*dhcpv4.DHCPv4, error) {
+func makeListeningSocket() (int, error) {
+	fd, err := unix.Socket(unix.AF_INET, unix.SOCK_RAW, int(htons(unix.IPPROTO_UDP)))
+	if err != nil {
+		return fd, err
+	}
+	llAddr := unix.SockaddrInet4{
+		Addr: [4]byte{0, 0, 0, 0},
+		Port: dhcpv4.ClientPort,
+	}
+	err = unix.Bind(fd, &llAddr)
+	return fd, err
+}
+
+func sendReceive(sendFd, recvFd int, raddr, laddr *net.UDPAddr, packet *dhcpv4.DHCPv4, messageType dhcpv4.MessageType) (*dhcpv4.DHCPv4, error) {
 	packetBytes, err := makeRawUDPPacket(packet.ToBytes(), *raddr, *laddr)
 	if err != nil {
 		return nil, err
@@ -121,19 +109,20 @@ func sendReceive(sendFd, recvFd *ipv4.RawConn, raddr, laddr *net.UDPAddr, packet
 		response    *dhcpv4.DHCPv4
 	)
 	copy(destination[:], raddr.IP.To4())
+	remoteAddr := unix.SockaddrInet4{Port: laddr.Port, Addr: destination}
 	recvErrors := make(chan error, 1)
 	go func(errs chan<- error) {
 		// set read timeout
-		err := recvFd.SetDeadline(time.Now().Add(defaultReadTimeout))
-		if err != nil {
-			errs <- err
+		deadline := &unix.Timeval{Sec: time.Now().Add(defaultReadTimeout).Unix(), Usec: 0}
+		if innerErr := unix.SetsockoptTimeval(recvFd, unix.SOL_SOCKET, unix.SO_RCVTIMEO, deadline); innerErr != nil {
+			errs <- innerErr
 			return
 		}
 		for {
 			buf := make([]byte, maxUDPReceivedPacketSize)
-			n, ipAddr, innerErr := recvFd.ReadFromIP(buf)
+			n, _, innerErr := unix.Recvfrom(recvFd, buf, 0)
 			if innerErr != nil {
-				errs <- fmt.Errorf("failed to read DHCP reply packet from %s: %w", ipAddr, innerErr)
+				errs <- innerErr
 				return
 			}
 
@@ -166,7 +155,7 @@ func sendReceive(sendFd, recvFd *ipv4.RawConn, raddr, laddr *net.UDPAddr, packet
 			}
 			// UDP checksum is not checked
 			pLen := int(binary.BigEndian.Uint16(udph[4:6]))
-			payload := buf[iph.Len+8 : iph.Len+8+pLen]
+			payload := buf[iph.Len+8 : iph.Len+pLen]
 
 			response, innerErr = dhcpv4.FromBytes(payload)
 			if innerErr != nil {
@@ -194,26 +183,21 @@ func sendReceive(sendFd, recvFd *ipv4.RawConn, raddr, laddr *net.UDPAddr, packet
 		recvErrors <- nil
 	}(recvErrors)
 
-	// send the DHCP broadcast request while the goroutine waits for replies
-	err = sendFd.SetDeadline(time.Now().Add(defaultWriteTimeout))
-	if err != nil {
+	// send the request while the goroutine waits for replies
+	if err = unix.Sendto(sendFd, packetBytes, 0, &remoteAddr); err != nil {
 		return nil, err
-	}
-	n, werr := sendFd.WriteToIP(packetBytes, &net.IPAddr{IP: net.IPv4bcast})
-	if werr != nil {
-		return nil, fmt.Errorf("failed to send DHCP request packet, sent only %d bytes: %w", n, werr)
 	}
 
 	select {
 	case err = <-recvErrors:
-		if err == syscall.EAGAIN {
-			return nil, fmt.Errorf("timed out while listening for replies")
+		if err == unix.EAGAIN {
+			return nil, errors.New("timed out while listening for replies")
 		}
 		if err != nil {
 			return nil, err
 		}
 	case <-time.After(defaultReadTimeout):
-		return nil, fmt.Errorf("timed out while listening for replies")
+		return nil, errors.New("timed out while listening for replies")
 	}
 
 	return response, nil
