@@ -178,7 +178,7 @@ func queryTXTPortRecord(resolver, query string) (resultPort uint16) {
 	for _, ans := range res.Answer {
 		if txtRecords, ok := ans.(*dns.TXT); ok {
 			for _, txt := range txtRecords.Txt {
-				port, err := strconv.ParseInt(txt, 10, 16)
+				port, err := strconv.ParseUint(txt, 10, 16)
 				if err != nil {
 					log.Error("DNS-SD failed to convert TXT record to a valid port", "err", err)
 					continue

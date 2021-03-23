@@ -49,12 +49,12 @@ func realMain() int {
 		return v
 	}
 	if err := libconfig.LoadFile(env.ConfigFile(), &cfg); err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, err)
+		_, _ = fmt.Fprintf(os.Stderr, "Unable to load config: %v\n", err)
 		return 1
 	}
 	cfg.InitDefaults()
 	if err := log.Setup(cfg.Logging); err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, err)
+		_, _ = fmt.Fprintf(os.Stderr, "fatal error: %v\n", err)
 		return 1
 	}
 	cfg.InterfaceName = *ifaceName

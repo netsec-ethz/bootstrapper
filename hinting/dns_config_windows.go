@@ -71,7 +71,7 @@ func getDNSConfigIPHlpAPI() (dnsInfo *DNSInfo) {
 }
 
 func getDNSConfigResolv() (dnsInfo *DNSInfo) {
-	log.Error("IP Helper API not supported on current OS", "err",
+	log.Error("Resolv not supported on current OS", "err",
 		errors.New("only reading from IP_ADAPTER_ADDRESSES is implemented for this OS,"+
 			" use getDNSConfigIPHlpAPI to get local DNS config"))
 	return nil
