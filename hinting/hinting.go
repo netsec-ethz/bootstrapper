@@ -17,19 +17,31 @@ package hinting
 import (
 	"net"
 	"runtime"
+	"sync"
+	"time"
 
 	"github.com/scionproto/scion/go/lib/log"
 )
 
 const (
-	DiscoveryPort uint16 = 8041
+	DiscoveryPort  uint16 = 8041
+	DNSInfoTimeout        = 5 * time.Second
+)
+
+var (
+	dnsInfoChan    = make(chan DNSInfo)
+	dnsInfoDone    = make(chan struct{})
+	dnsInfoWriters sync.WaitGroup
+
+	dispatcher       *dnsInfoDispatcher
+	singleDispatcher = &sync.Mutex{}
 )
 
 type HintGenerator interface {
 	Generate(chan<- net.TCPAddr)
 }
 
-func getLocalDNSConfig() {
+func getLocalDNSConfig(dnsChan chan<- DNSInfo) {
 	var dnsInfo *DNSInfo
 	switch runtime.GOOS {
 	case "linux", "darwin", "freebsd", "aix", "dragonfly", "hurd", "illumos", "netbsd", "openbsd", "solaris", "zos":
@@ -57,8 +69,109 @@ func getLocalDNSConfig() {
 		log.Debug("Cannot easily get local DNS configuration from OS.", "OS", runtime.GOOS)
 	}
 	if dnsInfo != nil {
-		dnsServersChan <- *dnsInfo
+		dnsInfoWriters.Add(1)
+		select {
+		case dnsChan <- *dnsInfo:
+			dnsInfoWriters.Done()
+		case <-dnsInfoDone:
+			dnsInfoWriters.Done()
+		}
 	}
+	return
+}
+
+type dnsInfoDispatcher struct {
+	pubDone  chan struct{}
+	subChans []chan DNSInfo
+	sync.Mutex
+}
+
+// subscribes to dnsInfoChan dispatcher and returns subscriber channel
+func (d *dnsInfoDispatcher) subscribe() <-chan DNSInfo {
+	d.Lock()
+	// guard the append to subChans, since it is being iterated on in publish()
+	defer d.Unlock()
+	subscriber := make(chan DNSInfo)
+	select {
+	case <-d.pubDone:
+		close(subscriber)
+		// don't add closed channel to subChans
+		// return closed channel to unblock caller
+		return subscriber
+	default:
+	}
+	d.subChans = append(d.subChans, subscriber)
+	return subscriber
+}
+
+// publish data feed dnsInfoChan to all subscribers
+func (d *dnsInfoDispatcher) publish() {
+	// Only retrieve local config once
+	go getLocalDNSConfig(dnsInfoChan)
+
+	d.pubDone = make(chan struct{})
+	var openRequests sync.WaitGroup
+	for i := range dnsInfoChan {
+		d.Lock()
+		// Publish value to all subscribers
+		for _, s := range d.subChans {
+			openRequests.Add(1)
+			// Send on each subscriber at its own rate, ordering depends on the scheduler
+			go func(requester chan DNSInfo, dnsInfo DNSInfo) {
+				defer openRequests.Done()
+				select {
+				case requester <- dnsInfo:
+				case <-d.pubDone:
+					return
+				}
+			}(s, i)
+		}
+		d.Unlock()
+	}
+	// all done, nothing to publish anymore, close out publishing channels
+	d.Lock()
+	close(d.pubDone)
+	d.Unlock()
+	openRequests.Wait()
+	d.Lock()
+	for _, s := range d.subChans {
+		close(s)
+	}
+	d.Unlock()
+}
+
+// getDNSConfig returns a channel providing DNSInfo
+func (d *dnsInfoDispatcher) getDNSConfig() (dnsChan <-chan DNSInfo) {
+	if d != nil {
+		return d.subscribe()
+	}
+	return d.initDispatcher()
+}
+
+// initDispatcher initializes dispatcher and returns subscriber channel
+func (d *dnsInfoDispatcher) initDispatcher() (dnsChan <-chan DNSInfo) {
+	// Lazily create a single dispatcher
+	singleDispatcher.Lock()
+	defer singleDispatcher.Unlock()
+	if d != nil {
+		return d.subscribe()
+	}
+	dispatcher = &dnsInfoDispatcher{}
+	dnsChan = dispatcher.subscribe()
+	// Only start dispatcher when we have subscribers
+	go dispatcher.publish()
+	// Signal dnsInfoChan senders after timeout
+	dnsInfoTimeout := time.After(DNSInfoTimeout)
+	go func() {
+		select {
+		case <-dnsInfoTimeout:
+			// Signal senders
+			close(dnsInfoDone)
+			dnsInfoWriters.Wait()
+			// Stop publishing new DNSInfo
+			close(dnsInfoChan)
+		}
+	}()
 	return
 }
 

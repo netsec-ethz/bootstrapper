@@ -23,10 +23,11 @@ import (
 	"net"
 	"time"
 
-	"github.com/insomniacslk/dhcp/dhcpv4"
-	"github.com/scionproto/scion/go/lib/common"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/sys/unix"
+
+	"github.com/insomniacslk/dhcp/dhcpv4"
+	"github.com/scionproto/scion/go/lib/common"
 )
 
 func (g *DHCPHintGenerator) sendReceive(p *dhcpv4.DHCPv4, ifname string) (*dhcpv4.DHCPv4, error) {
@@ -136,6 +137,11 @@ func sendReceive(sendFd, recvFd int, raddr, laddr *net.UDPAddr, packet *dhcpv4.D
 				continue
 			}
 			udph := buf[iph.Len:n]
+			if 8 > len(udph) {
+				errs <- fmt.Errorf("failed to parse DHCP reply packet from %s: " +
+					"invalid UDP header length", ipAddr)
+				return
+			}
 			// check source and destination ports
 			srcPort := int(binary.BigEndian.Uint16(udph[0:2]))
 			expectedSrcPort := dhcpv4.ServerPort
@@ -153,9 +159,15 @@ func sendReceive(sendFd, recvFd int, raddr, laddr *net.UDPAddr, packet *dhcpv4.D
 			if dstPort != expectedDstPort {
 				continue
 			}
-			// UDP checksum is not checked
 			pLen := int(binary.BigEndian.Uint16(udph[4:6]))
-			payload := buf[iph.Len+8 : iph.Len+pLen]
+			// UDP checksum is not checked
+			payloadOffsetEnd := iph.Len+pLen
+			if payloadOffsetEnd > n || payloadOffsetEnd > iph.TotalLen {
+				errs <- fmt.Errorf("failed to parse DHCP reply packet from %s: " +
+					"invalid UDP payload length", ipAddr)
+				return
+			}
+			payload := buf[iph.Len+8 : payloadOffsetEnd]
 
 			response, innerErr = dhcpv4.FromBytes(payload)
 			if innerErr != nil {
