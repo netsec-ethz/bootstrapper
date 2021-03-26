@@ -20,6 +20,7 @@ package hinting
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"net"
 	"time"
 
@@ -138,8 +139,8 @@ func sendReceive(sendFd, recvFd int, raddr, laddr *net.UDPAddr, packet *dhcpv4.D
 			}
 			udph := buf[iph.Len:n]
 			if 8 > len(udph) {
-				errs <- fmt.Errorf("failed to parse DHCP reply packet from %s: " +
-					"invalid UDP header length", ipAddr)
+				errs <- fmt.Errorf("failed to parse DHCP reply packet: " +
+					"invalid UDP header length")
 				return
 			}
 			// check source and destination ports
@@ -163,8 +164,8 @@ func sendReceive(sendFd, recvFd int, raddr, laddr *net.UDPAddr, packet *dhcpv4.D
 			// UDP checksum is not checked
 			payloadOffsetEnd := iph.Len+pLen
 			if payloadOffsetEnd > n || payloadOffsetEnd > iph.TotalLen {
-				errs <- fmt.Errorf("failed to parse DHCP reply packet from %s: " +
-					"invalid UDP payload length", ipAddr)
+				errs <- fmt.Errorf("failed to parse DHCP reply packet: " +
+					"invalid UDP payload length")
 				return
 			}
 			payload := buf[iph.Len+8 : payloadOffsetEnd]
