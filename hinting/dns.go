@@ -31,10 +31,6 @@ const (
 	discoveryDDDSDNSName    string = "x-sciondiscovery:tcp"
 )
 
-var (
-	dnsServersChan = make(chan DNSInfo)
-)
-
 type DNSInfo struct {
 	resolvers     []string
 	searchDomains []string
@@ -61,8 +57,8 @@ func (g *DNSSDHintGenerator) Generate(ipHintsChan chan<- net.TCPAddr) {
 	if !g.cfg.EnableSRV && !g.cfg.EnableSD && !g.cfg.EnableNAPTR {
 		return
 	}
-	go getLocalDNSConfig()
-	for dnsServer := range dnsServersChan {
+	dnsChan := dispatcher.getDNSConfig()
+	for dnsServer := range dnsChan {
 		log.Info("Using following resolvers for DNS hinting", "resolvers", dnsServer.resolvers)
 		for _, resolver := range dnsServer.resolvers {
 			for _, domain := range dnsServer.searchDomains {
@@ -103,7 +99,11 @@ func resolveDNS(resolver, query string, resultPort uint16, dnsRR uint16, ipHints
 	msg.RecursionDesired = true
 	result, err := dns.Exchange(msg, resolver+":53")
 	if err != nil {
-		log.Error("DNS-SD failed", "err", err)
+		if dnsRR != dns.TypeAAAA {
+			log.Error("DNS-SD failed", "err", err)
+		} else {
+			log.Info("DNS-SD failed for IPv6", "err", err)
+		}
 		return
 	}
 
@@ -178,7 +178,7 @@ func queryTXTPortRecord(resolver, query string) (resultPort uint16) {
 	for _, ans := range res.Answer {
 		if txtRecords, ok := ans.(*dns.TXT); ok {
 			for _, txt := range txtRecords.Txt {
-				port, err := strconv.ParseInt(txt, 10, 16)
+				port, err := strconv.ParseUint(txt, 10, 16)
 				if err != nil {
 					log.Error("DNS-SD failed to convert TXT record to a valid port", "err", err)
 					continue

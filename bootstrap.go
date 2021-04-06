@@ -24,6 +24,7 @@ import (
 	"net"
 	"net/http"
 	"path"
+	"sync"
 	"time"
 
 	"golang.org/x/net/context/ctxhttp"
@@ -73,14 +74,22 @@ func (b *Bootstrapper) tryBootstrapping() error {
 		hinting.NewDNSSDHintGenerator(&cfg.DNSSD),
 		// XXX: mDNS depends on the DNS search domain to be correct, which can depend on DHCP for getting it
 		hinting.NewMDNSHintGenerator(&cfg.MDNS, b.iface)}
+	wg := sync.WaitGroup{}
 	for _, g := range hintGenerators {
+		wg.Add(1)
 		go func(g hinting.HintGenerator) {
+			defer wg.Done()
 			defer log.HandlePanic()
 			g.Generate(b.ipHintsChan)
 		}(g)
 	}
 	hintsTimeout := time.After(hintsTimeout)
-	log.Info("Waiting for hints ...")
+	hintersDone := make(chan struct{})
+	go func() {
+		log.Info("Waiting for hints ...")
+		wg.Wait()
+		close(hintersDone)
+	}()
 OuterLoop:
 	for {
 		select {
@@ -100,6 +109,9 @@ OuterLoop:
 			break OuterLoop
 		case <-hintsTimeout:
 			return fmt.Errorf("bootstrapper timed out")
+		case <-hintersDone:
+			log.Info("... all hinters terminated.")
+			break OuterLoop
 		}
 	}
 	return nil

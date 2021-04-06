@@ -20,6 +20,8 @@
 package hinting
 
 import (
+	"golang.org/x/sys/unix"
+
 	"github.com/insomniacslk/dhcp/dhcpv4"
 	"github.com/insomniacslk/dhcp/dhcpv4/client4"
 	"github.com/scionproto/scion/go/lib/common"
@@ -32,10 +34,12 @@ func (g *DHCPHintGenerator) sendReceive(p *dhcpv4.DHCPv4, ifname string) (*dhcpv
 	if err != nil {
 		return nil, common.NewBasicError("DHCP hinter failed to open broadcast sender socket", err)
 	}
+	defer unix.Close(sender)
 	receiver, err := client4.MakeListeningSocket(g.iface.Name)
 	if err != nil {
 		return nil, common.NewBasicError("DHCP hinter failed to open receiver socket", err)
 	}
+	defer unix.Close(receiver)
 	ack, err := client.SendReceive(sender, receiver, p, dhcpv4.MessageTypeAck)
 	if err != nil {
 		return nil, common.NewBasicError("DHCP hinter failed to send inform request", err)

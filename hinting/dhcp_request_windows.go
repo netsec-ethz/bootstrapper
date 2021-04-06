@@ -34,10 +34,12 @@ func (g *DHCPHintGenerator) sendReceive(p *dhcpv4.DHCPv4, ifname string) (*dhcpv
 	if err != nil {
 		return nil, common.NewBasicError("DHCP hinter failed to open broadcast sender socket", err)
 	}
+	defer sender.Close()
 	receiver, err := makeListeningSocket()
 	if err != nil {
 		return nil, common.NewBasicError("DHCP hinter failed to open receiver socket", err)
 	}
+	defer receiver.Close()
 	raddr := &net.UDPAddr{IP: net.IPv4bcast, Port: dhcpv4.ServerPort}
 	laddr := &net.UDPAddr{IP: net.IPv4zero, Port: dhcpv4.ClientPort}
 	ack, err := sendReceive(sender, receiver, raddr, laddr, p, dhcpv4.MessageTypeAck)
@@ -147,6 +149,11 @@ func sendReceive(sendFd, recvFd *ipv4.RawConn, raddr, laddr *net.UDPAddr, packet
 				continue
 			}
 			udph := buf[iph.Len:n]
+			if 8 > len(udph) {
+				errs <- fmt.Errorf("failed to parse DHCP reply packet from %s: " +
+					"invalid UDP header length", ipAddr)
+				return
+			}
 			// check source and destination ports
 			srcPort := int(binary.BigEndian.Uint16(udph[0:2]))
 			expectedSrcPort := dhcpv4.ServerPort
@@ -164,9 +171,15 @@ func sendReceive(sendFd, recvFd *ipv4.RawConn, raddr, laddr *net.UDPAddr, packet
 			if dstPort != expectedDstPort {
 				continue
 			}
-			// UDP checksum is not checked
 			pLen := int(binary.BigEndian.Uint16(udph[4:6]))
-			payload := buf[iph.Len+8 : iph.Len+8+pLen]
+			// UDP checksum is not checked
+			payloadOffsetEnd := iph.Len+pLen
+			if payloadOffsetEnd > n || payloadOffsetEnd > iph.TotalLen {
+				errs <- fmt.Errorf("failed to parse DHCP reply packet from %s: " +
+					"invalid UDP payload length", ipAddr)
+				return
+			}
+			payload := buf[iph.Len+8 : payloadOffsetEnd]
 
 			response, innerErr = dhcpv4.FromBytes(payload)
 			if innerErr != nil {

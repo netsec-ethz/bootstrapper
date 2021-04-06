@@ -57,8 +57,8 @@ func (g *DHCPHintGenerator) Generate(ipHintsChan chan<- net.TCPAddr) {
 		log.Error("Error creating sending/receiving DHCP request/response", "err", err)
 		return
 	}
+	go g.dispatchDNSInfo(ack, dnsInfoChan)
 	g.dispatchIPHints(ack, ipHintsChan)
-	g.dispatchDNSInfo(ack, dnsServersChan)
 	log.Info("DHCP hinting done")
 }
 
@@ -101,7 +101,7 @@ func (g *DHCPHintGenerator) dispatchIPHints(ack *dhcpv4.DHCPv4, ipHintChan chan<
 	}
 }
 
-func (g *DHCPHintGenerator) dispatchDNSInfo(ack *dhcpv4.DHCPv4, serversChan chan DNSInfo) {
+func (g *DHCPHintGenerator) dispatchDNSInfo(ack *dhcpv4.DHCPv4, dnsChan chan<- DNSInfo) {
 	resolvers := dhcpv4.GetIPs(dhcpv4.OptionDomainNameServer, ack.Options)
 	log.Info("DHCP DNS resolver option", "resolvers", resolvers)
 	rawSearchDomains := ack.Options.Get(dhcpv4.OptionDNSDomainSearchList)
@@ -122,7 +122,14 @@ func (g *DHCPHintGenerator) dispatchDNSInfo(ack *dhcpv4.DHCPv4, serversChan chan
 	} else {
 		dnsInfo.searchDomains = []string{}
 	}
-	serversChan <- dnsInfo
+	dnsInfoWriters.Add(1)
+	select {
+	case <-dnsInfoDone:
+		// Ignore dnsInfo value, done publishing
+	default:
+		dnsChan <- dnsInfo
+	}
+	dnsInfoWriters.Done()
 }
 
 func parseBootstrapVendorOption(optionBytes []byte) (ip net.IP, port int, err error) {
@@ -178,15 +185,20 @@ func parseBootstrapVendorOption(optionBytes []byte) (ip net.IP, port int, err er
 			"unexpected Vendor-ID, PEN:%d", PEN)
 		return
 	}
-	if offset+1 >= buffLen {
+	if offset+1 > buffLen {
 		err = fmt.Errorf("failed to parse DHCP Vendor Specific Option (125), " +
 			"missing data length")
 		return
 	}
 	dataLen := int(optionBytes[offset])
 	offset += 1
+	if offset + dataLen > buffLen {
+		err = fmt.Errorf("failed to parse DHCP Vendor Specific Option (125), " +
+			"data length exceeds option buffer length")
+		return
+	}
 
-	for (offset-5)+1 < dataLen && offset+1 < buffLen {
+	for offset+2 <= buffLen {
 		typeCode := typeCode(optionBytes[offset])
 		offset += 1
 		typeLength := int(optionBytes[offset])
@@ -221,6 +233,10 @@ func parseBootstrapVendorOption(optionBytes []byte) (ip net.IP, port int, err er
 				"length", typeLength)
 		}
 		offset += typeLength
+	}
+	if offset != buffLen {
+		log.Debug("Stray data after last field, ignored.", "offset", offset,
+			"buffLen", buffLen)
 	}
 	return
 }

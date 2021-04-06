@@ -54,12 +54,18 @@ func (g *MDNSSDHintGenerator) Generate(ipHintsChan chan<- net.TCPAddr) {
 		log.Error("mDNS could not construct dns resolver", "err", err)
 		return
 	}
-	entriesChan := make(chan *zeroconf.ServiceEntry)
-	go func() {
-		defer log.HandlePanic()
-		handleEntries(entriesChan, ipHintsChan)
-	}()
-	discoverEntries(resolver, entriesChan)
+	dnsChan := dispatcher.getDNSConfig()
+	for dnsServer := range dnsChan {
+		for _, searchDomain := range dnsServer.searchDomains {
+			entriesChan := make(chan *zeroconf.ServiceEntry)
+			go func() {
+				defer log.HandlePanic()
+				handleEntries(entriesChan, ipHintsChan)
+			}()
+			discoverEntries(resolver, searchDomain, entriesChan)
+		}
+	}
+	log.Info("mDNS hinting done")
 }
 
 func handleEntries(entriesChan <-chan *zeroconf.ServiceEntry, ipHintsChan chan<- net.TCPAddr) {
@@ -76,20 +82,15 @@ func handleEntries(entriesChan <-chan *zeroconf.ServiceEntry, ipHintsChan chan<-
 			ipHintsChan <- addr
 		}
 	}
-	log.Info("mDNS hinting done")
 }
 
-func discoverEntries(resolver *zeroconf.Resolver, entriesChan chan *zeroconf.ServiceEntry) {
+func discoverEntries(resolver *zeroconf.Resolver, searchDomain string, entriesChan chan *zeroconf.ServiceEntry) {
 	ctx, cancel := context.WithTimeout(context.Background(), resolverTimeout)
 	defer cancel()
-	go getLocalDNSConfig()
-	for dnsServer := range dnsServersChan {
-		for _, searchDomain := range dnsServer.searchDomains {
-			err := resolver.Browse(ctx, "_sciondiscovery._tcp", searchDomain, entriesChan)
-			if err != nil {
-				log.Error("mDNS could not lookup", "searchDomain", searchDomain, "err", err)
-			}
-		}
+	err := resolver.Browse(ctx, "_sciondiscovery._tcp", searchDomain, entriesChan)
+	if err != nil {
+		log.Error("mDNS could not lookup", "searchDomain", searchDomain, "err", err)
+		return
 	}
 	<-ctx.Done()
 }
