@@ -124,11 +124,12 @@ func (g *DHCPHintGenerator) dispatchDNSInfo(ack *dhcpv4.DHCPv4, dnsChan chan<- D
 	}
 	dnsInfoWriters.Add(1)
 	select {
-	case dnsChan <- dnsInfo:
-		dnsInfoWriters.Done()
 	case <-dnsInfoDone:
-		dnsInfoWriters.Done()
+		// Ignore dnsInfo value, done publishing
+	default:
+		dnsChan <- dnsInfo
 	}
+	dnsInfoWriters.Done()
 }
 
 func parseBootstrapVendorOption(optionBytes []byte) (ip net.IP, port int, err error) {

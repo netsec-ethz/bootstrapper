@@ -71,11 +71,12 @@ func getLocalDNSConfig(dnsChan chan<- DNSInfo) {
 	if dnsInfo != nil {
 		dnsInfoWriters.Add(1)
 		select {
-		case dnsChan <- *dnsInfo:
-			dnsInfoWriters.Done()
 		case <-dnsInfoDone:
-			dnsInfoWriters.Done()
+			// Ignore dnsInfo value, done publishing
+		default:
+			dnsChan <- *dnsInfo
 		}
+		dnsInfoWriters.Done()
 	}
 	return
 }
@@ -145,16 +146,16 @@ func (d *dnsInfoDispatcher) getDNSConfig() (dnsChan <-chan DNSInfo) {
 	if d != nil {
 		return d.subscribe()
 	}
-	return d.initDispatcher()
+	return initDispatcher()
 }
 
-// initDispatcher initializes dispatcher and returns subscriber channel
-func (d *dnsInfoDispatcher) initDispatcher() (dnsChan <-chan DNSInfo) {
+// initDispatcher initializes the dispatcher and returns subscriber channel
+func initDispatcher() (dnsChan <-chan DNSInfo) {
 	// Lazily create a single dispatcher
 	singleDispatcher.Lock()
 	defer singleDispatcher.Unlock()
-	if d != nil {
-		return d.subscribe()
+	if dispatcher != nil {
+		return dispatcher.subscribe()
 	}
 	dispatcher = &dnsInfoDispatcher{}
 	dnsChan = dispatcher.subscribe()
