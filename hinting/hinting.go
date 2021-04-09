@@ -20,7 +20,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/scionproto/scion/go/lib/log"
+	log "github.com/inconshreveable/log15"
 )
 
 const (

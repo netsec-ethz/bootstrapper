@@ -28,24 +28,23 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/insomniacslk/dhcp/dhcpv4"
-	"github.com/scionproto/scion/go/lib/common"
 )
 
 func (g *DHCPHintGenerator) sendReceive(p *dhcpv4.DHCPv4, ifname string) (*dhcpv4.DHCPv4, error) {
 	p.SetBroadcast()
 	sender, err := makeBroadcastSocket(ifname)
 	if err != nil {
-		return nil, common.NewBasicError("DHCP hinter failed to open broadcast sender socket", err)
+		return nil, fmt.Errorf("DHCP hinter failed to open broadcast sender socket: %w", err)
 	}
 	receiver, err := makeListeningSocket()
 	if err != nil {
-		return nil, common.NewBasicError("DHCP hinter failed to open receiver socket", err)
+		return nil, fmt.Errorf("DHCP hinter failed to open receiver socket: %w", err)
 	}
 	raddr := &net.UDPAddr{IP: net.IPv4bcast, Port: dhcpv4.ServerPort}
 	laddr := &net.UDPAddr{IP: net.IPv4zero, Port: dhcpv4.ClientPort}
 	ack, err := sendReceive(sender, receiver, raddr, laddr, p, dhcpv4.MessageTypeAck)
 	if err != nil {
-		return nil, common.NewBasicError("DHCP hinter failed to send inform request", err)
+		return nil, fmt.Errorf("DHCP hinter failed to send inform request: %w", err)
 	}
 	return ack, nil
 }

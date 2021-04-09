@@ -20,11 +20,9 @@ import (
 	"fmt"
 	"net"
 
+	log "github.com/inconshreveable/log15"
 	"github.com/insomniacslk/dhcp/dhcpv4"
 	"github.com/insomniacslk/dhcp/rfc1035label"
-
-	"github.com/scionproto/scion/go/lib/common"
-	"github.com/scionproto/scion/go/lib/log"
 )
 
 type DHCPHintGeneratorConf struct {
@@ -65,7 +63,7 @@ func (g *DHCPHintGenerator) Generate(ipHintsChan chan<- net.TCPAddr) {
 func (g *DHCPHintGenerator) createDHCPRequest() (*dhcpv4.DHCPv4, error) {
 	localIPs, err := dhcpv4.IPv4AddrsForInterface(g.iface)
 	if err != nil || len(localIPs) == 0 {
-		return nil, common.NewBasicError("DHCP hinter could not get local IPs", err)
+		return nil, fmt.Errorf("DHCP hinter could not get local IPs: %w", err)
 	}
 	p, err := dhcpv4.NewInform(g.iface.HardwareAddr, localIPs[0], dhcpv4.WithRequestedOptions(
 		dhcpv4.OptionDefaultWorldWideWebServer,
@@ -73,7 +71,7 @@ func (g *DHCPHintGenerator) createDHCPRequest() (*dhcpv4.DHCPv4, error) {
 		dhcpv4.OptionDNSDomainSearchList,
 		dhcpv4.OptionVendorIdentifyingVendorSpecific))
 	if err != nil {
-		return nil, common.NewBasicError("DHCP hinter failed to build network packet", err)
+		return nil, fmt.Errorf("DHCP hinter failed to build network packet: %w", err)
 	}
 	return p, nil
 }

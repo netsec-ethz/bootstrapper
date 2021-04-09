@@ -21,8 +21,7 @@ import (
 	"time"
 
 	"github.com/grandcat/zeroconf"
-
-	"github.com/scionproto/scion/go/lib/log"
+	log "github.com/inconshreveable/log15"
 )
 
 const (
@@ -59,7 +58,6 @@ func (g *MDNSSDHintGenerator) Generate(ipHintsChan chan<- net.TCPAddr) {
 		for _, searchDomain := range dnsServer.searchDomains {
 			entriesChan := make(chan *zeroconf.ServiceEntry)
 			go func() {
-				defer log.HandlePanic()
 				handleEntries(entriesChan, ipHintsChan)
 			}()
 			discoverEntries(resolver, searchDomain, entriesChan)

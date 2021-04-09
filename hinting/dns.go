@@ -21,9 +21,8 @@ import (
 	"sort"
 	"strconv"
 
+	log "github.com/inconshreveable/log15"
 	"github.com/miekg/dns"
-
-	"github.com/scionproto/scion/go/lib/log"
 )
 
 const (

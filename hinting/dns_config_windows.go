@@ -20,7 +20,7 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"github.com/scionproto/scion/go/lib/log"
+	log "github.com/inconshreveable/log15"
 )
 
 func getDNSConfigIPHlpAPI() (dnsInfo *DNSInfo) {
