@@ -111,7 +111,7 @@ expose the endpoints needed by the bootstrapper:
 
 A simple site example configuration to host the SCION configuration resources.
 Use a proper OpenAPI configuration and server setup for more complex setups
-(the scionproto repository contains a Bazel target to generate boilerplace
+(the scionproto repository contains a Bazel target to generate boilerplate
 for use with a chi-server) or proxy the requests to the SCION control service
 if the corresponding OpenAPI endpoint is publicly reachable.
 
@@ -133,13 +133,13 @@ server {
  Make sure to replace `{isd}`, `{base}`, and `{serial}` with the values corresponding to
 your TRC(s).
 
-### Check the webserver
+### Check the web server
 
-You can test that the webserver is working with:
+You can test that the web server is working with:
 
 - `curl http://${SERVER_IP}:8041/topology`, and
 - `curl http://${SERVER_IP}:8041/trcs/isd{isd}-b{base}-s{serial}/blob`
   (make sure to replace `{isd}`, `{base}`, and `{serial}` with the correct values.)
 
 The former should return the topology of the AS.
-The latter should return containing the requested TRC.
+The latter should return a file containing the requested TRC.
