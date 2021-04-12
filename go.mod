@@ -2,8 +2,10 @@ module github.com/netsec-ethz/bootstrapper
 
 require (
 	github.com/grandcat/zeroconf v1.0.0
+	github.com/inconshreveable/log15 v0.0.0-20201112154412-8562bdadbbac
 	github.com/insomniacslk/dhcp v0.0.0-20200922210017-67c425063dca
 	github.com/miekg/dns v1.1.27
+	github.com/pelletier/go-toml v1.8.1-0.20200708110244-34de94e6a887
 	github.com/scionproto/scion v0.6.0
 	github.com/stretchr/testify v1.6.1 // indirect
 	github.com/u-root/u-root v7.0.0+incompatible // indirect

@@ -101,14 +101,14 @@ func (g *DHCPHintGenerator) dispatchIPHints(ack *dhcpv4.DHCPv4, ipHintChan chan<
 
 func (g *DHCPHintGenerator) dispatchDNSInfo(ack *dhcpv4.DHCPv4, dnsChan chan<- DNSInfo) {
 	resolvers := dhcpv4.GetIPs(dhcpv4.OptionDomainNameServer, ack.Options)
-	log.Info("DHCP DNS resolver option", "resolvers", resolvers)
+	log.Debug("DHCP DNS resolver option", "resolvers", resolvers)
 	rawSearchDomains := ack.Options.Get(dhcpv4.OptionDNSDomainSearchList)
 	searchDomains, err := rfc1035label.FromBytes(rawSearchDomains)
 	if err != nil {
 		log.Error("DHCP failed to to read search domains", "err", err)
 		// don't return, proceed without search domains
 	}
-	log.Info("DHCP DNS search domain option", "searchDomains", searchDomains)
+	log.Debug("DHCP DNS search domain option", "searchDomains", searchDomains)
 	dnsInfo := DNSInfo{}
 	for _, item := range resolvers {
 		dnsInfo.resolvers = append(dnsInfo.resolvers, item.String())
