@@ -56,7 +56,7 @@ Make sure to disable the features you don't need.
 
 A minimal example of the bootstrapper service units ``scion-bootstrapper@.service``.
 
-```toml
+```ini
 [Unit]
 After=network-online.target
 Before=scion-daemon@%i.service
@@ -79,7 +79,7 @@ AmbientCapabilities=CAP_NET_RAW
 
 A minimal example of the sciond service units ``scion-daemon-bootstrap@.service``.
 
-```toml
+```ini
 [Unit]
 After=network-online.target scion-bootstrapper@%i.service scion-dispatcher.service
 BindsTo=scion-bootstrapper@%i.service
