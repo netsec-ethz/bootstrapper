@@ -156,7 +156,7 @@ func parseBootstrapVendorOption(optionBytes []byte) (ip net.IP, port int, err er
 	// The IP address and the port of the discovery server are encoded as a sequence of code/length/value fields
 	// as defined in RFC2132 section 2 "DHCP Option Field Format".
 	// An IPv4 address is encoded as a 4 byte sequence with type code 1.
-	// A UDP port is encoded as a 2 byte sequence with code type 2.
+	// A UDP port is encoded as a 2 byte sequence with type code 2.
 	//
 	//    Code   Len   Vendor-specific information
 	//   +-----+-----+-----+-----+---

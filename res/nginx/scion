@@ -4,7 +4,10 @@ server {
 
         location / {
                 root /srv/http/;
-                autoindex on;
-                autoindex_format json;
+                autoindex off;
         }
+        location /topology { alias /srv/http/topology.json; }
+        location /trcs { alias /srv/http/trcs.json; }
+        location /trcs/isd{isd}-b{base}-s{serial} { alias /srv/http/isd{isd}-b{base}-s{serial}.json; }
+        location /trcs/isd{isd}-b{base}-s{serial}/blob { alias /srv/http/ISD{isd}-B{base}-S{serial}.trc; }
 }
