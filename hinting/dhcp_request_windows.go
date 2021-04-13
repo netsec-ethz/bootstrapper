@@ -27,7 +27,7 @@ import (
 	"github.com/insomniacslk/dhcp/dhcpv4"
 )
 
-func (g *DHCPHintGenerator) sendReceive(p *dhcpv4.DHCPv4, ifname string) (*dhcpv4.DHCPv4, error) {
+func (g *DHCPHintGenerator) sendReceive(p *dhcpv4.DHCPv4) (*dhcpv4.DHCPv4, error) {
 	p.SetBroadcast()
 	sender, err := makeBroadcastSocket()
 	if err != nil {
