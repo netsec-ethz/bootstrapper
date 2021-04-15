@@ -29,17 +29,16 @@ const (
 )
 
 func FetchConfiguration(outputPath string, addr *net.TCPAddr) error {
-	trcsIndexUrl := buildTRCsURL(addr.IP, addr.Port)
-	err := PullTRCs(trcsIndexUrl, outputPath, addr)
+	err := PullTRCs(outputPath, addr)
 	if err != nil {
 		return err
 	}
-	topoUrl := buildTopologyURL(addr.IP, addr.Port)
-	err = PullTopology(topoUrl, outputPath, addr)
+	err = PullTopology(outputPath, addr)
 	return err
 }
 
-func PullTopology(url string, outputPath string, addr *net.TCPAddr) error {
+func PullTopology(outputPath string, addr *net.TCPAddr) error {
+	url := buildTopologyURL(addr.IP, addr.Port)
 	log.Info("Fetching topology", "url", url)
 	ctx, cancelF := context.WithTimeout(context.Background(), httpRequestTimeout)
 	defer cancelF()
@@ -94,7 +93,8 @@ type TRCID struct {
 	SerialNumber int `json:"serial_number"`
 }
 
-func PullTRCs(url string, outputPath string, addr *net.TCPAddr) error {
+func PullTRCs(outputPath string, addr *net.TCPAddr) error {
+	url := buildTRCsURL(addr.IP, addr.Port)
 	log.Info("Fetching TRCs index", "url", url)
 	ctx, cancelF := context.WithTimeout(context.Background(), httpRequestTimeout)
 	defer cancelF()
@@ -120,8 +120,7 @@ func PullTRCs(url string, outputPath string, addr *net.TCPAddr) error {
 		return fmt.Errorf("unable to parse TRCs listing from JSON bytes: %w", err)
 	}
 	for _, trc := range trcs {
-		trcUrl := buildTRCURL(addr.IP, addr.Port, trc.Id)
-		err = PullTRC(trcUrl, outputPath, addr, trc.Id)
+		err = PullTRC(outputPath, addr, trc.Id)
 		if err != nil {
 			log.Error("Failed to retrieve TRC", "trc", trc, "err", err)
 		}
@@ -134,7 +133,8 @@ func buildTRCsURL(ip net.IP, port int) string {
 	return fmt.Sprintf("http://%s:%d/%s", ip, port, urlPath)
 }
 
-func PullTRC(url string, outputPath string, addr *net.TCPAddr, trcID TRCID) error {
+func PullTRC(outputPath string, addr *net.TCPAddr, trcID TRCID) error {
+	url := buildTRCURL(addr.IP, addr.Port, trcID)
 	log.Info("Fetching TRC", "url", url)
 	ctx, cancelF := context.WithTimeout(context.Background(), httpRequestTimeout)
 	defer cancelF()
