@@ -22,23 +22,24 @@ import (
 const (
 	baseURL              = ""
 	topologyEndpoint     = "topology"
-	TRCsEndpoint         = "trcs"
-	TRCBlobEndpoint      = "trcs/isd%d-b%d-s%d/blob"
-	TopologyJSONFileName = "topology.json"
+	trcsEndpoint         = "trcs"
+	trcBlobEndpoint      = "trcs/isd%d-b%d-s%d/blob"
+	topologyJSONFileName = "topology.json"
 	httpRequestTimeout   = 2 * time.Second
 )
 
 func FetchConfiguration(outputPath string, addr *net.TCPAddr) error {
-	err := PullTRCs(outputPath, addr)
+	trcsIndexUrl := buildTRCsURL(addr.IP, addr.Port)
+	err := PullTRCs(trcsIndexUrl, outputPath, addr)
 	if err != nil {
 		return err
 	}
-	err = PullTopology(outputPath, addr)
+	topoUrl := buildTopologyURL(addr.IP, addr.Port)
+	err = PullTopology(topoUrl, outputPath, addr)
 	return err
 }
 
-func PullTopology(outputPath string, addr *net.TCPAddr) error {
-	url := buildTopologyURL(addr.IP, addr.Port)
+func PullTopology(url string, outputPath string, addr *net.TCPAddr) error {
 	log.Info("Fetching topology", "url", url)
 	ctx, cancelF := context.WithTimeout(context.Background(), httpRequestTimeout)
 	defer cancelF()
@@ -65,7 +66,7 @@ func PullTopology(outputPath string, addr *net.TCPAddr) error {
 	if err != nil {
 		return fmt.Errorf("unable to parse RWTopology from JSON bytes: %w", err)
 	}*/
-	topologyPath := path.Join(outputPath, TopologyJSONFileName)
+	topologyPath := path.Join(outputPath, topologyJSONFileName)
 	err = ioutil.WriteFile(topologyPath, raw, 0644)
 	if err != nil {
 		return fmt.Errorf("bootstrapper could not store topology: %w", err)
@@ -93,8 +94,7 @@ type TRCID struct {
 	SerialNumber int `json:"serial_number"`
 }
 
-func PullTRCs(outputPath string, addr *net.TCPAddr) error {
-	url := buildTRCsURL(addr.IP, addr.Port)
+func PullTRCs(url string, outputPath string, addr *net.TCPAddr) error {
 	log.Info("Fetching TRCs index", "url", url)
 	ctx, cancelF := context.WithTimeout(context.Background(), httpRequestTimeout)
 	defer cancelF()
@@ -120,7 +120,8 @@ func PullTRCs(outputPath string, addr *net.TCPAddr) error {
 		return fmt.Errorf("unable to parse TRCs listing from JSON bytes: %w", err)
 	}
 	for _, trc := range trcs {
-		err = PullTRC(outputPath, addr, trc.Id)
+		trcUrl := buildTRCURL(addr.IP, addr.Port, trc.Id)
+		err = PullTRC(trcUrl, outputPath, addr, trc.Id)
 		if err != nil {
 			log.Error("Failed to retrieve TRC", "trc", trc, "err", err)
 		}
@@ -129,12 +130,11 @@ func PullTRCs(outputPath string, addr *net.TCPAddr) error {
 }
 
 func buildTRCsURL(ip net.IP, port int) string {
-	urlPath := baseURL + TRCsEndpoint
+	urlPath := baseURL + trcsEndpoint
 	return fmt.Sprintf("http://%s:%d/%s", ip, port, urlPath)
 }
 
-func PullTRC(outputPath string, addr *net.TCPAddr, trcID TRCID) error {
-	url := buildTRCURL(addr.IP, addr.Port, trcID)
+func PullTRC(url string, outputPath string, addr *net.TCPAddr, trcID TRCID) error {
 	log.Info("Fetching TRC", "url", url)
 	ctx, cancelF := context.WithTimeout(context.Background(), httpRequestTimeout)
 	defer cancelF()
@@ -162,7 +162,7 @@ func PullTRC(outputPath string, addr *net.TCPAddr, trcID TRCID) error {
 }
 
 func buildTRCURL(ip net.IP, port int, trc TRCID) string {
-	urlPath := baseURL + TRCBlobEndpoint
+	urlPath := baseURL + trcBlobEndpoint
 	uri := fmt.Sprintf("http://%s:%d/", ip, port) + urlPath
 	return fmt.Sprintf(uri, trc.Isd, trc.BaseNumber, trc.SerialNumber)
 }
