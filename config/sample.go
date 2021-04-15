@@ -14,8 +14,6 @@
 
 package config
 
-const idSample = "bootstrapper"
-
 const bootstrapperSample = `
 # The folder where the retrieved topology and certificates are stored (default ".")
 sciond_config_dir = "."
@@ -40,4 +38,8 @@ sciond_config_dir = "."
 [mdns]
 	# Whether to enable mDNS discovery or not (default false)
   	enable = true
+[log]
+    [log.console]
+        # Console logging level (debug|info|error) (default info)
+        level = "debug"
 `

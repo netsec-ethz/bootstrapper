@@ -21,9 +21,8 @@ import (
 	"sort"
 	"strconv"
 
+	log "github.com/inconshreveable/log15"
 	"github.com/miekg/dns"
-
-	"github.com/scionproto/scion/go/lib/log"
 )
 
 const (
@@ -59,7 +58,7 @@ func (g *DNSSDHintGenerator) Generate(ipHintsChan chan<- net.TCPAddr) {
 	}
 	dnsChan := dispatcher.getDNSConfig()
 	for dnsServer := range dnsChan {
-		log.Info("Using following resolvers for DNS hinting", "resolvers", dnsServer.resolvers)
+		log.Debug("Using following resolvers for DNS hinting", "resolvers", dnsServer.resolvers)
 		for _, resolver := range dnsServer.resolvers {
 			for _, domain := range dnsServer.searchDomains {
 				if g.cfg.EnableSRV {
@@ -82,14 +81,14 @@ func (g *DNSSDHintGenerator) Generate(ipHintsChan chan<- net.TCPAddr) {
 
 func getDNSSDQuery(resolver, domain string) string {
 	query := discoveryServiceDNSName + "." + domain + "."
-	log.Info("DNS-SD", "query", query, "rr", dns.TypePTR, "resolver", resolver)
+	log.Debug("DNS-SD", "query", query, "rr", dns.TypePTR, "resolver", resolver)
 	return query
 }
 
 // Straightforward Naming Authority Pointer
 func getDNSNAPTRQuery(resolver, domain string) string {
 	query := domain + "."
-	log.Info("DNS-S-NAPTR", "query", query, "rr", dns.TypeNAPTR, "resolver", resolver)
+	log.Debug("DNS-S-NAPTR", "query", query, "rr", dns.TypeNAPTR, "resolver", resolver)
 	return query
 }
 
@@ -110,7 +109,7 @@ func resolveDNS(resolver, query string, resultPort uint16, dnsRR uint16, ipHints
 	var serviceRecords []dns.SRV
 	var naptrRecords []dns.NAPTR
 	for _, answer := range result.Answer {
-		log.Info("DNS", "answer", answer)
+		log.Debug("DNS", "answer", answer)
 		switch answer.(type) {
 		case *dns.PTR:
 			result := *(answer.(*dns.PTR))
@@ -142,7 +141,7 @@ func resolveDNS(resolver, query string, resultPort uint16, dnsRR uint16, ipHints
 	if len(serviceRecords) > 0 {
 		sort.Sort(byPriority(serviceRecords))
 
-		log.Info("DNS Resolving service records", "serviceRecords", serviceRecords)
+		log.Debug("DNS Resolving service records", "serviceRecords", serviceRecords)
 		for _, answer := range serviceRecords {
 			resolveDNS(resolver, answer.Target, answer.Port, dns.TypeAAAA, ipHintsChan)
 			resolveDNS(resolver, answer.Target, answer.Port, dns.TypeA, ipHintsChan)
@@ -152,7 +151,7 @@ func resolveDNS(resolver, query string, resultPort uint16, dnsRR uint16, ipHints
 	if len(naptrRecords) > 0 {
 		sort.Sort(byOrder(naptrRecords))
 
-		log.Info("DNS Resolving NAPTR records", "serviceRecords", naptrRecords)
+		log.Debug("DNS Resolving NAPTR records", "serviceRecords", naptrRecords)
 		for _, answer := range naptrRecords {
 			switch answer.Flags {
 			case "":

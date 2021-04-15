@@ -17,12 +17,13 @@ package hinting
 
 import (
 	"context"
+	"io/ioutil"
+	stdlog "log"
 	"net"
 	"time"
 
 	"github.com/grandcat/zeroconf"
-
-	"github.com/scionproto/scion/go/lib/log"
+	log "github.com/inconshreveable/log15"
 )
 
 const (
@@ -49,6 +50,9 @@ func (g *MDNSSDHintGenerator) Generate(ipHintsChan chan<- net.TCPAddr) {
 	if !g.cfg.Enable {
 		return
 	}
+	// library zeroconf is noisy by default and has no way to disable logging
+	stdlog.SetFlags(0)
+	stdlog.SetOutput(ioutil.Discard)
 	resolver, err := zeroconf.NewResolver(zeroconf.SelectIfaces([]net.Interface{*g.iface}))
 	if err != nil {
 		log.Error("mDNS could not construct dns resolver", "err", err)
@@ -59,7 +63,6 @@ func (g *MDNSSDHintGenerator) Generate(ipHintsChan chan<- net.TCPAddr) {
 		for _, searchDomain := range dnsServer.searchDomains {
 			entriesChan := make(chan *zeroconf.ServiceEntry)
 			go func() {
-				defer log.HandlePanic()
 				handleEntries(entriesChan, ipHintsChan)
 			}()
 			discoverEntries(resolver, searchDomain, entriesChan)
@@ -70,7 +73,7 @@ func (g *MDNSSDHintGenerator) Generate(ipHintsChan chan<- net.TCPAddr) {
 
 func handleEntries(entriesChan <-chan *zeroconf.ServiceEntry, ipHintsChan chan<- net.TCPAddr) {
 	for entry := range entriesChan {
-		log.Info("mDNS Got entry", "entry", entry)
+		log.Debug("mDNS Got entry", "entry", entry)
 		for _, ip := range entry.AddrIPv4 {
 			addr := net.TCPAddr{IP: ip, Port: entry.Port}
 			log.Info("mDNS hint", "Addr", addr)

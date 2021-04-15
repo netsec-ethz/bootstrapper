@@ -20,11 +20,9 @@ import (
 	"fmt"
 	"net"
 
+	log "github.com/inconshreveable/log15"
 	"github.com/insomniacslk/dhcp/dhcpv4"
 	"github.com/insomniacslk/dhcp/rfc1035label"
-
-	"github.com/scionproto/scion/go/lib/common"
-	"github.com/scionproto/scion/go/lib/log"
 )
 
 type DHCPHintGeneratorConf struct {
@@ -52,7 +50,7 @@ func (g *DHCPHintGenerator) Generate(ipHintsChan chan<- net.TCPAddr) {
 		log.Error("Error creating DHCP request", "err", err)
 		return
 	}
-	ack, err := g.sendReceive(p, g.iface.Name)
+	ack, err := g.sendReceive(p)
 	if err != nil {
 		log.Error("Error creating sending/receiving DHCP request/response", "err", err)
 		return
@@ -65,7 +63,7 @@ func (g *DHCPHintGenerator) Generate(ipHintsChan chan<- net.TCPAddr) {
 func (g *DHCPHintGenerator) createDHCPRequest() (*dhcpv4.DHCPv4, error) {
 	localIPs, err := dhcpv4.IPv4AddrsForInterface(g.iface)
 	if err != nil || len(localIPs) == 0 {
-		return nil, common.NewBasicError("DHCP hinter could not get local IPs", err)
+		return nil, fmt.Errorf("DHCP hinter could not get local IPs: %w", err)
 	}
 	p, err := dhcpv4.NewInform(g.iface.HardwareAddr, localIPs[0], dhcpv4.WithRequestedOptions(
 		dhcpv4.OptionDefaultWorldWideWebServer,
@@ -73,7 +71,7 @@ func (g *DHCPHintGenerator) createDHCPRequest() (*dhcpv4.DHCPv4, error) {
 		dhcpv4.OptionDNSDomainSearchList,
 		dhcpv4.OptionVendorIdentifyingVendorSpecific))
 	if err != nil {
-		return nil, common.NewBasicError("DHCP hinter failed to build network packet", err)
+		return nil, fmt.Errorf("DHCP hinter failed to build network packet: %w", err)
 	}
 	return p, nil
 }
@@ -103,14 +101,14 @@ func (g *DHCPHintGenerator) dispatchIPHints(ack *dhcpv4.DHCPv4, ipHintChan chan<
 
 func (g *DHCPHintGenerator) dispatchDNSInfo(ack *dhcpv4.DHCPv4, dnsChan chan<- DNSInfo) {
 	resolvers := dhcpv4.GetIPs(dhcpv4.OptionDomainNameServer, ack.Options)
-	log.Info("DHCP DNS resolver option", "resolvers", resolvers)
+	log.Debug("DHCP DNS resolver option", "resolvers", resolvers)
 	rawSearchDomains := ack.Options.Get(dhcpv4.OptionDNSDomainSearchList)
 	searchDomains, err := rfc1035label.FromBytes(rawSearchDomains)
 	if err != nil {
 		log.Error("DHCP failed to to read search domains", "err", err)
 		// don't return, proceed without search domains
 	}
-	log.Info("DHCP DNS search domain option", "searchDomains", searchDomains)
+	log.Debug("DHCP DNS search domain option", "searchDomains", searchDomains)
 	dnsInfo := DNSInfo{}
 	for _, item := range resolvers {
 		dnsInfo.resolvers = append(dnsInfo.resolvers, item.String())

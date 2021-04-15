@@ -1,4 +1,5 @@
 // Copyright 2020 Anapaya Systems
+// Copyright 2021 ETH Zurich
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,54 +20,44 @@ import (
 	"fmt"
 	"os"
 
+	log "github.com/inconshreveable/log15"
+
 	"github.com/netsec-ethz/bootstrapper/config"
-	libconfig "github.com/scionproto/scion/go/lib/config"
-	"github.com/scionproto/scion/go/lib/env"
-	"github.com/scionproto/scion/go/lib/fatal"
-	"github.com/scionproto/scion/go/lib/infra/modules/itopo"
-	"github.com/scionproto/scion/go/lib/log"
-	"github.com/scionproto/scion/go/proto"
 )
 
 var (
-	cfg       config.Config
-	ifaceName = flag.String("iface", "", "the interface used to probe the network")
+	cfg config.Config
 )
-
-func init() {
-	flag.Usage = env.Usage
-}
 
 func main() {
 	os.Exit(realMain())
 }
 
 func realMain() int {
-	fatal.Init()
-	env.AddFlags()
+	config.AddFlags()
 	flag.Parse()
-	if v, ok := env.CheckFlags(&cfg); !ok {
+	if v, ok := config.CheckFlags(&cfg); !ok {
 		return v
 	}
-	if err := libconfig.LoadFile(env.ConfigFile(), &cfg); err != nil {
+	if err := config.LoadFile(&cfg); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "Unable to load config: %v\n", err)
 		return 1
 	}
 	cfg.InitDefaults()
-	if err := log.Setup(cfg.Logging); err != nil {
+	lvl, err := log.LvlFromString(cfg.Logging.Console.Level)
+	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "fatal error: %v\n", err)
 		return 1
 	}
-	cfg.InterfaceName = *ifaceName
-	defer log.Flush()
-	defer env.LogAppStopped("bootstrapper", "")
-	defer log.HandlePanic()
+	log.Root().SetHandler(log.LvlFilterHandler(lvl, log.StreamHandler(os.Stdout, log.LogfmtFormat())))
+
+	cfg.InterfaceName = config.IfaceName
 
 	if err := cfg.Validate(); err != nil {
 		log.Error("Unable to validate config", "err", err)
 		return 1
 	}
-	itopo.Init(&itopo.Config{ID: "", Svc: proto.ServiceType_unset, Callbacks: itopo.Callbacks{}})
+	defer log.Info(fmt.Sprintf("=====================> Service stopped %s", "bootstrapper"))
 	b, err := NewBootstrapper(&cfg)
 	if err != nil {
 		log.Error("Error creating bootstrapper", "err", err)
