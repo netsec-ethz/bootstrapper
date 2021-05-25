@@ -2,15 +2,11 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "go_default_library",
-    srcs = [
-        "config.go",
-        "sample.go",
-    ],
-    importpath = "github.com/netsec-ethz/bootstrapper/config",
+    srcs = ["scion_openapi.go"],
+    importpath = "github.com/netsec-ethz/bootstrapper/fetcher",
     visibility = ["//visibility:public"],
     deps = [
-        "//hinting:go_default_library",
         "@com_github_inconshreveable_log15//:go_default_library",
-        "@com_github_pelletier_go_toml//:go_default_library",
+        "@org_golang_x_net//context/ctxhttp:go_default_library",
     ],
 )
