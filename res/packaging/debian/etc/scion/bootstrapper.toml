@@ -1,0 +1,28 @@
+# The folder where the retrieved topology and certificates are stored (default ".")
+sciond_config_dir = "/etc/scion/"
+
+# Discovery mechanisms
+[mock]
+        # Whether to enable the fake discovery or not (default false)
+        # This discovery mechanisms is used for testing purposes
+	enable = false
+        # The address to return when simulating a network discovery (default "")
+	address = "127.0.0.1"
+[dhcp]
+	# Whether to enable DHCP discovery or not (default false)
+	enable = true
+[dnssd]
+        # Whether to enable DNS SRV discovery or not (default false)
+	enable_srv = true
+        # Whether to enable DNS-SD discovery or not (default false)
+	enable_sd = true
+        # Whether to enable DNS-NAPTR discovery or not (default false)
+	enable_naptr = true
+[mdns]
+        # Whether to enable mDNS discovery or not (default false)
+	enable = true
+
+[log]
+    [log.console]
+        # Console logging level (debug|info|error) (default info)
+	level = "info"

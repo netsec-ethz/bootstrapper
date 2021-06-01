@@ -2,10 +2,6 @@
 set -e
 
 if [ "$1" = remove ]; then
-    systemctl disable scion-dispatcher.service \
-				      scion-bootstrapper@* \
-				      scion-daemon-bootstrap@*
-    systemctl stop scion-dispatcher.service \
-				   scion-bootstrapper@* \
-				   scion-daemon-bootstrap@*
+    systemctl disable scion-bootstrapper@*
+    systemctl stop scion-bootstrapper@*
 fi

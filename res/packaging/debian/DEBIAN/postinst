@@ -18,20 +18,24 @@ set -e
 
 case "$1" in
     configure)
-    systemctl daemon-reload > /dev/null 2>&1
+        setcap cap_net_raw+eip /usr/bin/bootstrapper
+	mkdir -p /etc/scion/certs
+	chown scion:scion -R /etc/scion/certs
+	# Make dhclient hook executable
+	chmod +x /etc/dhcp/dhclient-enter-hooks.d/bootstrapper
+        systemctl daemon-reload > /dev/null 2>&1
 
-	# retrieve the first active network interface
-	iface=$(ip addr show | awk '/inet.*brd/{print $NF; exit}')
-	if [ $? -ne 0 ] || [ -z "$iface" ]; then
-	    echo "[x] Could not find an active network interface, manual systemd startup needed"
-	else
-	    echo "[*] Using $iface to bootstrap SCION ..."
-	fi
+        # retrieve the first active network interface
+        iface=$(ip addr show | awk '/inet.*brd/{print $NF; exit}')
+        if [ $? -ne 0 ] || [ -z "$iface" ]; then
+            echo "[x] Could not find an active network interface, manual systemd startup needed"
+        else
+            echo "[*] Using $iface to bootstrap SCION endhost ..."
+        fi
 
-    systemctl enable --now scion-dispatcher.service \
-                           scion-bootstrapper@$iface.service \
-                           scion-daemon-bootstrap@$iface.service 2>&1 > /dev/null
-	exit 0
+        systemctl enable --now scion-bootstrapper@$iface.service > /dev/null 2>&1
+        systemctl restart --now scion-daemon.service > /dev/null 2>&1
+        exit 0
         ;;
     abort-*)
         # How'd we get here??

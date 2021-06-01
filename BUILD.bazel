@@ -1,4 +1,5 @@
 load("@bazel_gazelle//:def.bzl", "gazelle")
+load("@rules_pkg//:pkg.bzl", "pkg_deb", "pkg_tar")
 load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
 load("@io_bazel_rules_go//go:def.bzl", "nogo")
 
@@ -27,6 +28,85 @@ go_library(
         "//fetcher:go_default_library",
         "@org_golang_x_net//context/ctxhttp:go_default_library",
         "@com_github_inconshreveable_log15//:go_default_library",
+    ],
+)
+
+# SCION bootstrapper package
+pkg_tar(
+    name = "scion-bootstrapper-config",
+    srcs = [
+        "res/packaging/debian/etc/scion/bootstrapper.toml",
+    ],
+    mode = "0644",
+    package_dir = "/etc/scion/",
+)
+
+pkg_tar(
+    name = "scion-bootstrapper-dhcp-hook",
+    srcs = [
+        "res/packaging/debian/etc/dhcp/dhclient-enter-hooks.d/bootstrapper",
+    ],
+    mode = "0744",
+    package_dir = "/etc/dhcp/dhclient-enter-hooks.d/",
+)
+
+pkg_tar(
+    name = "scion-bootstrapper-bin",
+    srcs = [
+        "bin/bootstrapper",
+    ],
+    mode = "0755",
+    package_dir = "/usr/bin",
+)
+
+pkg_tar(
+    name = "scion-bootstrapper-systemd",
+    srcs = [
+        "res/packaging/debian/lib/systemd/system/scion-bootstrapper@.service",
+    ],
+    mode = "0644",
+    package_dir = "/lib/systemd/system",
+)
+
+pkg_tar(
+    name = "scion-bootstrapper",
+    extension = "tar.gz",
+    deps = [
+        ":scion-bootstrapper-bin",
+        ":scion-bootstrapper-systemd",
+        ":scion-bootstrapper-config",
+        ":scion-bootstrapper-dhcp-hook",
+    ],
+)
+
+# Package information
+PKG_DESCRIPTION = "SCION Endhost Bootstrapper"
+PKG_HOMEPAGE = "https://www.scion-architecture.net"
+PKG_MAINTAINER = "ETH Zurich, SCIONLab Team <scionlab-admins@sympa.ethz.ch>"
+# Add package defaults
+ENV_PKG_ARCHITECTURE = ""
+PKG_ARCHITECTURE = "amd64" if ENV_PKG_ARCHITECTURE == "" else ENV_PKG_ARCHITECTURE
+ENV_PKG_VERSION = ""
+PKG_VERSION = "0.0.0" if ENV_PKG_VERSION == "" else ENV_PKG_VERSION
+
+pkg_deb(
+    name = "scion-bootstrapper-deb",
+    architecture = PKG_ARCHITECTURE,
+    data = ":scion-bootstrapper",
+    depends = [
+        "scion-dispatcher",
+	"scion-daemon",
+    ],
+    description = PKG_DESCRIPTION,
+    homepage = PKG_HOMEPAGE,
+    maintainer = PKG_MAINTAINER,
+    package = "scion-bootstrapper",
+    postinst = "res/packaging/debian/DEBIAN/postinst",
+    priority = "optional",
+    section = "net",
+    version = PKG_VERSION,
+    conffiles = [
+        "/etc/scion/bootstrapper.toml",
     ],
 )
 

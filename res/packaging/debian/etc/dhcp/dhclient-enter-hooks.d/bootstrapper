@@ -1,0 +1,23 @@
+#
+# Script fragment to make dhclient trigger the SCION bootstrapper when (re)joining a network
+#
+
+if [ -z "${reason}" ]; then
+	exit 1
+fi
+
+if [ -z "${interface}" ]; then
+	exit 2
+fi
+
+case "$reason" in BOUND|RENEW|REBIND|REBOOT|TIMEOUT|BOUND6|RENEW6|REBIND6)
+	systemctl restart --now scion-bootstrapper@${interface}.service
+esac
+
+if [[ reason == 'REBOOT' ]]; then
+	exit 0
+fi
+
+# Restart scion-daemon if we are not coming from a reboot
+systemctl restart scion-daemon.service
+exit 0

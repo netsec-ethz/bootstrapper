@@ -1,3 +1,10 @@
 #!/bin/bash
-PKG_VERSION_SCION_BOOTSTRAPPER="0.0.0"
+# override defaults with values from CI environment
+sed -i "s/^ENV_PKG_ARCHITECTURE = .*/ENV_PKG_ARCHITECTURE = \"${CI_TARGET_ARCHITECTURE}\"/" BUILD.bazel &>/dev/null
+sed -i "s/^ENV_PKG_VERSION = .*/ENV_PKG_VERSION = \"${PKG_VERSION_SCION_BOOTSTRAPPER}\"/" BUILD.bazel &>/dev/null
+# set executable version string
+if [ -z "${PKG_VERSION_SCION_BOOTSTRAPPER}" ]; then
+	# Set package version information to "non-release" when building locally
+	PKG_VERSION_SCION_BOOTSTRAPPER="0.0.0"
+fi
 echo STABLE_PKG_VERSION_SCION_BOOTSTRAPPER "v"${PKG_VERSION_SCION_BOOTSTRAPPER}-$(git describe --tags --dirty --always)

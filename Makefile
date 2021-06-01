@@ -1,10 +1,10 @@
 
-.PHONY: all bazel build clean gazelle
+.PHONY: all bazel build clean gazelle package
 
-all: go_deps.bzl gazelle build test
+all: go_deps.bzl gazelle build test package
 
 build: bazel
-#go build -o ./bin/ -ldflags "-X github.com/netsec-ethz/bootstrapper/config.versionString="$(./.bazel-build-env | awk '{print $2}')
+#go build -ldflags "-X github.com/netsec-ethz/bootstrapper/config.versionString="$(./.bazel-build-env | awk '{print $2}')
 
 bazel: go_deps.bzl
 	rm -f bin/*
@@ -14,6 +14,10 @@ bazel: go_deps.bzl
 clean:
 	bazel clean
 	rm -f bin/*
+
+package: build
+	bazel build //:scion-bootstrapper-deb
+	cp bazel-bin/scion-bootstrapper_*_*.deb bin/
 
 gazelle: go.mod go_deps.bzl
 	bazel run //:gazelle -- update-repos -from_file=go.mod -to_macro=go_deps.bzl%go_deps
