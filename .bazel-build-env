@@ -1,0 +1,3 @@
+#!/bin/bash
+PKG_VERSION_SCION_BOOTSTRAPPER="0.0.0"
+echo STABLE_PKG_VERSION_SCION_BOOTSTRAPPER "v"${PKG_VERSION_SCION_BOOTSTRAPPER}-$(git describe --tags --dirty --always)

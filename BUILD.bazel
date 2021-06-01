@@ -1,4 +1,17 @@
-load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+load("@bazel_gazelle//:def.bzl", "gazelle")
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+load("@io_bazel_rules_go//go:def.bzl", "nogo")
+
+# gazelle:prefix github.com/netsec-ethz/bootstrapper
+gazelle(name = "gazelle")
+
+go_binary(
+    name = "bootstrapper",
+    embed = [":go_default_library"],
+    visibility = ["//visibility:public"],
+    x_defs = {"github.com/netsec-ethz/bootstrapper/config.versionString": "{STABLE_PKG_VERSION_SCION_BOOTSTRAPPER}"},
+    out = "bootstrapper",
+)
 
 go_library(
     name = "go_default_library",
@@ -6,25 +19,45 @@ go_library(
         "bootstrap.go",
         "main.go",
     ],
-    importpath = "github.com/scionproto/scion/go/bootstrapper",
+    importpath = "github.com/netsec-ethz/bootstrapper",
     visibility = ["//visibility:private"],
     deps = [
-        "//go/bootstrapper/config:go_default_library",
-        "//go/bootstrapper/hinting:go_default_library",
-        "//go/lib/common:go_default_library",
-        "//go/lib/config:go_default_library",
-        "//go/lib/env:go_default_library",
-        "//go/lib/fatal:go_default_library",
-        "//go/lib/infra/modules/itopo:go_default_library",
-        "//go/lib/log:go_default_library",
-        "//go/lib/topology:go_default_library",
-        "//go/proto:go_default_library",
+        "//config:go_default_library",
+        "//hinting:go_default_library",
+        "//fetcher:go_default_library",
         "@org_golang_x_net//context/ctxhttp:go_default_library",
+        "@com_github_inconshreveable_log15//:go_default_library",
     ],
 )
 
-go_binary(
-    name = "bootstrapper",
-    embed = [":go_default_library"],
+# Nogo - Go code analysis tool
+nogo(
+    name = "nogo",
+    config = "nogo.json",
     visibility = ["//visibility:public"],
+    deps = [
+        "@org_golang_x_tools//go/analysis/passes/asmdecl:go_tool_library",
+        "@org_golang_x_tools//go/analysis/passes/assign:go_tool_library",
+        "@org_golang_x_tools//go/analysis/passes/atomic:go_tool_library",
+        "@org_golang_x_tools//go/analysis/passes/bools:go_tool_library",
+        "@org_golang_x_tools//go/analysis/passes/buildtag:go_tool_library",
+        "@org_golang_x_tools//go/analysis/passes/cgocall:go_tool_library",
+        "@org_golang_x_tools//go/analysis/passes/composite:go_tool_library",
+        "@org_golang_x_tools//go/analysis/passes/copylock:go_tool_library",
+        "@org_golang_x_tools//go/analysis/passes/httpresponse:go_tool_library",
+        "@org_golang_x_tools//go/analysis/passes/loopclosure:go_tool_library",
+        "@org_golang_x_tools//go/analysis/passes/lostcancel:go_tool_library",
+        "@org_golang_x_tools//go/analysis/passes/nilfunc:go_tool_library",
+        "@org_golang_x_tools//go/analysis/passes/nilness:go_tool_library",
+        "@org_golang_x_tools//go/analysis/passes/printf:go_tool_library",
+        "@org_golang_x_tools//go/analysis/passes/shift:go_tool_library",
+        "@org_golang_x_tools//go/analysis/passes/stdmethods:go_tool_library",
+        "@org_golang_x_tools//go/analysis/passes/structtag:go_tool_library",
+        "@org_golang_x_tools//go/analysis/passes/tests:go_tool_library",
+        "@org_golang_x_tools//go/analysis/passes/unmarshal:go_tool_library",
+        "@org_golang_x_tools//go/analysis/passes/unreachable:go_tool_library",
+        "@org_golang_x_tools//go/analysis/passes/unsafeptr:go_tool_library",
+        "@org_golang_x_tools//go/analysis/passes/unusedresult:go_tool_library",
+    ],
 )
+

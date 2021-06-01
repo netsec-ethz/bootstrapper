@@ -1,0 +1,42 @@
+{
+  "assign": {
+    "exclude_files": {
+      "gazelle/walk/walk.go": ""
+    }
+  },
+  "composites": {
+    "exclude_files": {
+      "gazelle/language/go/resolve.go": "",
+      "/com_github_grandcat_zeroconf/": ""
+    }
+  },
+  "nilness": {
+    "only_files": {
+      "/go/": "https://github.com/bazelbuild/rules_go/issues/2172"
+    },
+    "exclude_files": {
+      "gazelle/cmd/gazelle/diff.go": "",
+      "/in_gopkg_yaml_v2/decode.go": "https://github.com/go-yaml/yaml/pull/492"
+    }
+  },
+  "unreachable": {
+    "exclude_files": {
+      "gazelle/pathtools/path.go": ""
+    }
+  },
+  "unsafeptr": {
+    "only_files": {
+      "/go/": "https://github.com/bazelbuild/rules_go/issues/2172"
+    }
+  },
+  "gocall": {
+    "only_files": {
+      "/go/": "https://github.com/bazelbuild/rules_go/issues/2172"
+    },
+    "exclude_files": {
+      "(vendor|external)/*": "Only applies to internal files",
+      "xtest/*": "",
+      "_test.go": "Doesn't apply for test files"
+    }
+  }
+}
