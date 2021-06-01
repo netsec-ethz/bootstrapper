@@ -21,6 +21,7 @@ package hinting
 
 import (
 	"fmt"
+
 	"golang.org/x/sys/unix"
 
 	"github.com/insomniacslk/dhcp/dhcpv4"

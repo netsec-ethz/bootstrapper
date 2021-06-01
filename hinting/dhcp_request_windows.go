@@ -149,7 +149,7 @@ func sendReceive(sendFd, recvFd *ipv4.RawConn, raddr, laddr *net.UDPAddr, packet
 			}
 			udph := buf[iph.Len:n]
 			if 8 > len(udph) {
-				errs <- fmt.Errorf("failed to parse DHCP reply packet from %s: " +
+				errs <- fmt.Errorf("failed to parse DHCP reply packet from %s: "+
 					"invalid UDP header length", ipAddr)
 				return
 			}
@@ -172,9 +172,9 @@ func sendReceive(sendFd, recvFd *ipv4.RawConn, raddr, laddr *net.UDPAddr, packet
 			}
 			pLen := int(binary.BigEndian.Uint16(udph[4:6]))
 			// UDP checksum is not checked
-			payloadOffsetEnd := iph.Len+pLen
+			payloadOffsetEnd := iph.Len + pLen
 			if payloadOffsetEnd > n || payloadOffsetEnd > iph.TotalLen {
-				errs <- fmt.Errorf("failed to parse DHCP reply packet from %s: " +
+				errs <- fmt.Errorf("failed to parse DHCP reply packet from %s: "+
 					"invalid UDP payload length", ipAddr)
 				return
 			}
