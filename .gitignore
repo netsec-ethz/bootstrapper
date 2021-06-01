@@ -1,1 +1,12 @@
-output.html
+# generated binaries
+bin/
+
+# bazel artifacts
+/bazel-*
+.bazel-cache/
+
+# IDE project files
+.idea/
+.project
+.settings/
+*.code-workspace

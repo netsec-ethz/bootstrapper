@@ -14,6 +14,15 @@ It integrates with SCION by using the same OpenAPI as the control service uses
 for exposing TRCs (serving as root certificate) and the topology file
 (describing the local SCION topology).
 
+## Building
+
+To build the bootstrapper executable, simply run `make bootstrapper` in the top level directory.
+In order to build the bootstrapper debian package, we use Bazel.
+The service files are in the `./res/packaging/debian/` directory.
+You can install Bazel by following the instructions at https://docs.bazel.build/versions/master/install-ubuntu.html
+You can then build the package by running `bazel build //:scion-bootstrapper-deb`.
+When contributing, please run `make all` in order to make sure that all targets build and to run the linter.
+
 ## Client bootstrap service configuration
 
 This file contains configuration options and provide some instructions to
@@ -143,3 +152,8 @@ You can test that the web server is working with:
 
 The former should return the topology of the AS.
 The latter should return a file containing the requested TRC.
+
+## Contributing
+
+When contributing, please run `make all` in order to make sure that all targets build and to run the linter.
+To update the `go_deps.bzl` file and the dependencies Bazel uses from the `go.mod` module file, run `make gazelle`.
