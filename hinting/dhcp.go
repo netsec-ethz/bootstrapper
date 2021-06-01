@@ -190,7 +190,7 @@ func parseBootstrapVendorOption(optionBytes []byte) (ip net.IP, port int, err er
 	}
 	dataLen := int(optionBytes[offset])
 	offset += 1
-	if offset + dataLen > buffLen {
+	if offset+dataLen > buffLen {
 		err = fmt.Errorf("failed to parse DHCP Vendor Specific Option (125), " +
 			"data length exceeds option buffer length")
 		return

@@ -161,7 +161,7 @@ func sendReceive(sendFd, recvFd int, raddr, laddr *net.UDPAddr, packet *dhcpv4.D
 			}
 			pLen := int(binary.BigEndian.Uint16(udph[4:6]))
 			// UDP checksum is not checked
-			payloadOffsetEnd := iph.Len+pLen
+			payloadOffsetEnd := iph.Len + pLen
 			if payloadOffsetEnd > n || payloadOffsetEnd > iph.TotalLen {
 				errs <- fmt.Errorf("failed to parse DHCP reply packet: " +
 					"invalid UDP payload length")

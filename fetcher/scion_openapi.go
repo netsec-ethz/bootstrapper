@@ -14,7 +14,6 @@ import (
 	"golang.org/x/net/context/ctxhttp"
 
 	log "github.com/inconshreveable/log15"
-
 	// "github.com/scionproto/scion/go/lib/topology"
 	// "github.com/scionproto/scion/go/pkg/cs/api"
 )
