@@ -1,5 +1,6 @@
 load("@bazel_gazelle//:def.bzl", "gazelle")
 load("@rules_pkg//:pkg.bzl", "pkg_deb", "pkg_tar")
+load("@rules_pkg//:rpm.bzl", "pkg_rpm")
 load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
 load("@io_bazel_rules_go//go:def.bzl", "nogo")
 
@@ -108,6 +109,18 @@ pkg_deb(
     conffiles = [
         "/etc/scion/bootstrapper.toml",
     ],
+)
+
+# RHEL rpm
+pkg_rpm(
+    name = "scion-bootstrapper-rpm",
+    architecture = PKG_ARCHITECTURE,
+    data = [
+        ":scion-bootstrapper",
+    ],
+    spec_file = "res/packaging/rhel/scion-bootstrapper.spec",
+    version = PKG_VERSION,
+    release = "1",
 )
 
 # Nogo - Go code analysis tool

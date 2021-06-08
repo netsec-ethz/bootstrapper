@@ -1,5 +1,5 @@
 
-.PHONY: all bazel build clean gazelle package
+.PHONY: all bazel build clean gazelle package package_rpm
 
 all: go_deps.bzl gazelle build test package
 
@@ -18,6 +18,10 @@ clean:
 package: build
 	bazel build //:scion-bootstrapper-deb
 	cp bazel-bin/scion-bootstrapper_*_*.deb bin/
+
+package_rpm: build
+	bazel build //:scion-bootstrapper-rpm
+	cp bazel-bin/scion-bootstrapper-*.*.rpm bin/
 
 gazelle: go.mod go_deps.bzl
 	bazel run //:gazelle -- update-repos -from_file=go.mod -to_macro=go_deps.bzl%go_deps
