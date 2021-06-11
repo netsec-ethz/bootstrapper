@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -e
 
+if [ -f /.dockerenv ]; then
+    exit 0
+fi
+
 if [ "$1" = remove ]; then
     systemctl disable scion-bootstrapper@*
     systemctl stop scion-bootstrapper@*
