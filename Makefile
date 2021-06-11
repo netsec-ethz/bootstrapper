@@ -1,5 +1,5 @@
 
-.PHONY: all bazel build clean gazelle package package_rpm
+.PHONY: all bazel build clean gazelle package package_deb package_rpm
 
 all: go_deps.bzl gazelle build test package
 
@@ -18,6 +18,8 @@ clean:
 package: build
 	bazel build //:scion-bootstrapper-deb
 	cp bazel-bin/scion-bootstrapper_*_*.deb bin/
+
+package_deb: package
 
 package_rpm: build
 	bazel build //:scion-bootstrapper-rpm
