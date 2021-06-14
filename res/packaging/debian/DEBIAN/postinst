@@ -26,7 +26,7 @@ case "$1" in
         fi
 
         # retrieve the first active network interface
-        iface=$(ip addr show | awk '/inet.*brd/{print $NF; exit}')
+        iface=$(ip -oneline address show up | awk '/inet.*brd/{print $2; exit}')
         if [ $? -ne 0 ] || [ -z "$iface" ]; then
             echo "[x] Could not find an active network interface, manual systemd startup needed"
             exit 0

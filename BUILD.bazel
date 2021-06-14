@@ -96,7 +96,7 @@ pkg_deb(
     data = ":scion-bootstrapper",
     depends = [
         "scion-dispatcher",
-	"scion-daemon",
+        "scion-daemon",
     ],
     description = PKG_DESCRIPTION,
     homepage = PKG_HOMEPAGE,
