@@ -47,7 +47,7 @@ pkg_tar(
     srcs = [
         "res/packaging/debian/etc/dhcp/dhclient-enter-hooks.d/bootstrapper",
     ],
-    mode = "0744",
+    mode = "0755",
     package_dir = "/etc/dhcp/dhclient-enter-hooks.d/",
 )
 

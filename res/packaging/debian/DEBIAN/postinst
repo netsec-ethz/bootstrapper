@@ -21,8 +21,6 @@ case "$1" in
         setcap cap_net_raw+eip /usr/bin/bootstrapper
         mkdir -p /etc/scion/certs
         chown scion:scion -R /etc/scion/certs
-        # Make dhclient hook executable
-        chmod +x /etc/dhcp/dhclient-enter-hooks.d/bootstrapper
         if [ ! -f /.dockerenv ]; then
             systemctl daemon-reload > /dev/null 2>&1
         fi
