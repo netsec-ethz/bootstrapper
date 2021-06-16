@@ -156,4 +156,4 @@ The latter should return a file containing the requested TRC.
 ## Contributing
 
 When contributing, please run `make all` in order to make sure that all targets build and to run the linter.
-To update the `go_deps.bzl` file and the dependencies Bazel uses from the `go.mod` module file, run `make gazelle`.
+To generate the `go_deps.bzl` file from scratch, delete it and run `make go_deps.bzl`.
