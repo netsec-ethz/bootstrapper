@@ -47,6 +47,7 @@ var (
 type Config struct {
 	InterfaceName   string
 	SciondConfigDir string                        `toml:"sciond_config_dir"`
+	Insecure        bool                          `toml:"insecure,omitempty"`
 	MOCK            hinting.MOCKHintGeneratorConf `toml:"mock"`
 	DHCP            hinting.DHCPHintGeneratorConf `toml:"dhcp"`
 	DNSSD           hinting.DNSHintGeneratorConf  `toml:"dnssd"`

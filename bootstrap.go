@@ -86,7 +86,7 @@ OuterLoop:
 			if serverAddr.Port == 0 {
 				serverAddr.Port = int(hinting.DiscoveryPort)
 			}
-			err := fetcher.FetchConfiguration(cfg.SciondConfigDir, serverAddr)
+			err := fetcher.FetchConfiguration(cfg.SciondConfigDir, cfg.Insecure, serverAddr)
 			if err != nil {
 				return err
 			}

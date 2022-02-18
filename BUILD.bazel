@@ -97,6 +97,7 @@ pkg_deb(
     depends = [
         "scion-dispatcher",
         "scion-daemon",
+        "openssl",
     ],
     description = PKG_DESCRIPTION,
     homepage = PKG_HOMEPAGE,
