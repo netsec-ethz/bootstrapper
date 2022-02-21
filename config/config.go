@@ -21,7 +21,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 
@@ -102,7 +101,7 @@ func CheckFlags(cfg *Config) (int, bool) {
 }
 
 func LoadFile(cfg *Config) error {
-	raw, err := ioutil.ReadFile(configPath)
+	raw, err := os.ReadFile(configPath)
 	if err != nil {
 		return err
 	}

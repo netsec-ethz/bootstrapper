@@ -17,7 +17,7 @@ package hinting
 
 import (
 	"context"
-	"io/ioutil"
+	"io"
 	stdlog "log"
 	"net"
 	"time"
@@ -52,7 +52,7 @@ func (g *MDNSSDHintGenerator) Generate(ipHintsChan chan<- net.TCPAddr) {
 	}
 	// library zeroconf is noisy by default and has no way to disable logging
 	stdlog.SetFlags(0)
-	stdlog.SetOutput(ioutil.Discard)
+	stdlog.SetOutput(io.Discard)
 	resolver, err := zeroconf.NewResolver(zeroconf.SelectIfaces([]net.Interface{*g.iface}))
 	if err != nil {
 		log.Error("mDNS could not construct dns resolver", "err", err)

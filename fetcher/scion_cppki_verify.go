@@ -18,7 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
+	"os"
 	"os/exec"
 	"path"
 	"sort"
@@ -98,14 +98,18 @@ func verifyTopologySignature(outputPath, signedTopologyPath, trustAnchorTRCPath 
 }
 
 func verifySignature(outputPath string) error {
-	files, err := ioutil.ReadDir(path.Join(outputPath, "certs"))
+	files, err := os.ReadDir(path.Join(outputPath, "certs"))
 	if err != nil {
 		return err
 	}
 	var trcs sortedFiles
 	for _, file := range files {
-		if file.Mode().IsRegular() {
-			trcs = append(trcs, file)
+		fileInfo, err := file.Info()
+		if err != nil {
+			continue
+		}
+		if fileInfo.Mode().IsRegular() {
+			trcs = append(trcs, fileInfo)
 		}
 	}
 	signedTopologyPath := path.Join(outputPath, signedTopologyFileName)

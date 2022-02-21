@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -77,7 +76,7 @@ func PullTopology(outputPath string, addr *net.TCPAddr) error {
 		return fmt.Errorf("unable to parse RWTopology from JSON bytes: %w", err)
 	}*/
 	topologyPath := path.Join(outputPath, topologyJSONFileName)
-	err = ioutil.WriteFile(topologyPath, raw, 0644)
+	err = os.WriteFile(topologyPath, raw, 0644)
 	if err != nil {
 		return fmt.Errorf("bootstrapper could not store topology: %w", err)
 	}
@@ -96,7 +95,7 @@ func PullSignedTopology(outputPath string, addr *net.TCPAddr) error {
 		return err
 	}
 	signedTopologyPath := path.Join(outputPath, signedTopologyFileName)
-	err = ioutil.WriteFile(signedTopologyPath, raw, 0644)
+	err = os.WriteFile(signedTopologyPath, raw, 0644)
 	if err != nil {
 		return fmt.Errorf("bootstrapper could not store topology signature: %w", err)
 	}
@@ -157,8 +156,8 @@ func PullTRC(outputPath string, addr *net.TCPAddr, trcID TRCID) error {
 	}
 	trcPath := path.Join(outputPath, "certs",
 		fmt.Sprintf("ISD%d-B%d-S%d.trc", trcID.Isd, trcID.BaseNumber, trcID.SerialNumber))
-	if _, err := os.Stat("trcPath"); os.IsNotExist(err) {
-		err = ioutil.WriteFile(trcPath, raw, 0644)
+	if _, err := os.Stat(trcPath); os.IsNotExist(err) {
+		err = os.WriteFile(trcPath, raw, 0644)
 		if err != nil {
 			return fmt.Errorf("bootstrapper could not store TRC: %w", err)
 		}
@@ -203,7 +202,7 @@ func fetchRawBytes(fileName string, url string) ([]byte, error) {
 			log.Error(fmt.Sprintf("Error closing the body of the %s response", fileName), "err", err)
 		}
 	}()
-	raw, err := ioutil.ReadAll(r)
+	raw, err := io.ReadAll(r)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read from response body: %w", err)
 	}
