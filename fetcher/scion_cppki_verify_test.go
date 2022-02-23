@@ -137,7 +137,48 @@ BoOsiiIP6du8N9hEQNeKckjLVw6hRANCAAR/QItd80MHXmzxRD6FcbkSdgPLPUP6
 DPitJwZlD4xT4T0YxhMVCGUteOm/8JAz3zqx+loDJowQI6wEvk4n/PJQ
 -----END PRIVATE KEY-----`
 
-var payload = `TEST payload`
+var payload = `{
+  "attributes": [],
+  "border_routers": {
+    "br-1": {
+      "interfaces": {
+        "1": {
+          "isd_as": "17-ffaa:0:1107",
+          "link_to": "PARENT",
+          "mtu": 1472,
+          "underlay": {
+            "public": "10.0.0.1:54321",
+            "remote": "10.0.8.1:50001"
+          }
+        }
+      },
+      "internal_addr": "127.0.0.1:30001"
+    }
+  },
+  "colibri_service": {
+    "co-1": {
+      "addr": "127.0.0.1:30257"
+    }
+  },
+  "control_service": {
+    "cs-1": {
+      "addr": "127.0.0.1:30254"
+    }
+  },
+  "discovery_service": {
+    "ds-1": {
+      "addr": "127.0.0.1:30254"
+    }
+  },
+  "isd_as": "17-ffaa:1:1",
+  "mtu": 1472,
+  "sigs": {
+    "sig-1": {
+      "ctrl_addr": "127.0.0.1:30256",
+      "data_addr": "127.0.0.1:30056"
+    }
+  }
+}`
 
 func TestVerify(t *testing.T) {
 	tmpDir := path.Join(os.TempDir(), "bootstrapper-cppki-tests")

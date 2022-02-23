@@ -16,6 +16,7 @@ package fetcher
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -25,7 +26,11 @@ import (
 	"time"
 )
 
-func verifyTopologySignature(outputPath, signedTopologyPath, trustAnchorTRCPath string) error {
+type topoIA struct {
+	IA string `json:"isd_as"`
+}
+
+func verifyTopologySignature(bootstrapperPath, signedTopology, trustAnchorTRC, verifiedTopology string) error {
 	// The signature is of the type:
 	// openssl cms -sign -text -in topology -out topology.signed -inkey as.key -signer as.cert.pem -certfile ca.cert.pem
 
@@ -43,33 +48,34 @@ func verifyTopologySignature(outputPath, signedTopologyPath, trustAnchorTRCPath 
 			"standard tools `openssl`, or `scion-pki` not found: %w", err)
 	}
 
-	_, trcFileName := path.Split(trustAnchorTRCPath)
+	// Verify signed payload
+	_, trcFileName := path.Split(trustAnchorTRC)
 	rootCertsBundleName := trcFileName + ".certs.pem"
-	rootCertsBundlePath := path.Join(outputPath, rootCertsBundleName)
+	rootCertsBundlePath := path.Join(bootstrapperPath, rootCertsBundleName)
 	// extract TRC certificates:
 	err = exec.CommandContext(ctx, "scion-pki", "trc", "extract", "certificates",
-		trustAnchorTRCPath, "-o", rootCertsBundlePath).Run()
+		trustAnchorTRC, "-o", rootCertsBundlePath).Run()
 	if err != nil {
 		return fmt.Errorf("signature verification failed: unable to extract root certificates from TRC %s: %w",
-			trustAnchorTRCPath, err)
+			trustAnchorTRC, err)
 	}
 
 	// verify signature:
 	err = exec.CommandContext(ctx, "openssl", "cms", "-verify",
-		"-in", signedTopologyPath, "-CAfile", rootCertsBundlePath, "-purpose", "any",).Run()
+		"-in", signedTopology, "-CAfile", rootCertsBundlePath, "-purpose", "any").Run()
 	if err != nil {
 		return fmt.Errorf("signature verification failed: signature verification failed: %w", err)
 	}
 
-	detachedSignaturePath := path.Join(outputPath, "detached_signature.p7s")
+	detachedSignaturePath := path.Join(bootstrapperPath, "detached_signature.p7s")
 	// detach signature for further validation:
 	err = exec.CommandContext(ctx, "openssl", "smime", "-pk7out",
-		"-in", signedTopologyPath, "-out", detachedSignaturePath).Run()
+		"-in", signedTopology, "-out", detachedSignaturePath).Run()
 	if err != nil {
 		return fmt.Errorf("certificate validation failed: unable to detach signature: %w", err)
 	}
 
-	asCertChain := path.Join(outputPath, "as_cert_chain.pem")
+	asCertChain := path.Join(bootstrapperPath, "as_cert_chain.pem")
 	// collect included certificates from detached signature:
 	shellCommand := fmt.Sprintf(
 		"openssl pkcs7 -in %s -inform PEM -print_certs | grep -v \"issuer\\|subject\" | grep . > %s",
@@ -82,15 +88,14 @@ func verifyTopologySignature(outputPath, signedTopologyPath, trustAnchorTRCPath 
 
 	// verify AS certificate chain back to TRC:
 	err = exec.CommandContext(ctx, "scion-pki", "certificate", "verify",
-		"--trc", trustAnchorTRCPath, asCertChain).Run()
+		"--trc", trustAnchorTRC, asCertChain).Run()
 	if err != nil {
 		return fmt.Errorf("certificate validation failed: unable to validate certificate chain: %w", err)
 	}
 
-	topologyPath := path.Join(outputPath, topologyJSONFileName)
 	// We now have a signed topology with a valid signature and a certificate chain back to a TRC, write out the payload
-	err = exec.CommandContext(ctx, "openssl", "cms", "-verify", "-in", signedTopologyPath,
-		"-CAfile", rootCertsBundlePath, "-purpose", "any", "-noout", "-text", "-out", topologyPath).Run()
+	err = exec.CommandContext(ctx, "openssl", "cms", "-verify", "-in", signedTopology,
+		"-CAfile", rootCertsBundlePath, "-purpose", "any", "-noout", "-text", "-out", verifiedTopology).Run()
 	if err != nil {
 		return fmt.Errorf("extracting signed payload failed: %w", err)
 	}
@@ -98,6 +103,43 @@ func verifyTopologySignature(outputPath, signedTopologyPath, trustAnchorTRCPath 
 }
 
 func verifySignature(outputPath string) error {
+	signedTopologyPath := path.Join(outputPath, signedTopologyFileName)
+
+	bootstrapperPath := path.Join(outputPath, "bootstrapper")
+	err := os.Mkdir(bootstrapperPath, 0777)
+	if err != nil {
+		return fmt.Errorf("Failed to create bootstrapper intermediate directory", "dir", bootstrapperPath, "err", err)
+	}
+	timestamp := time.Now().Unix()
+	bootstrapperPath = path.Join(outputPath, "bootstrapper", fmt.Sprintf("verify-%d", timestamp))
+	err = os.Mkdir(bootstrapperPath, 0777)
+	if err != nil {
+		return fmt.Errorf("Failed to create verify directory", "dir", bootstrapperPath, "err", err)
+	}
+
+	// extract unverified payload
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	unverifiedTopologyPath := path.Join(bootstrapperPath, topologyJSONFileName)
+	err = exec.CommandContext(ctx, "openssl", "cms", "-verify", "-noverify",
+		"-in", signedTopologyPath, "-text", "-noout", "-out", unverifiedTopologyPath).Run()
+	if err != nil {
+		return fmt.Errorf("extracting unverified payload failed: %w", err)
+	}
+
+	unverifiedTopo, err := os.ReadFile(unverifiedTopologyPath)
+	if err != nil {
+		return fmt.Errorf("Reading unverified payload failed: %w", err)
+	}
+	topoIA := topoIA{}
+	err = json.Unmarshal(unverifiedTopo, &topoIA)
+	if err != nil {
+		return fmt.Errorf("Parsing unverified payload failed: %w", err)
+	}
+
+	// Check if ISD ID in topology matches TRC
+	// TODO: extract ISD ID from TRC
+
 	files, err := os.ReadDir(path.Join(outputPath, "certs"))
 	if err != nil {
 		return err
@@ -112,13 +154,14 @@ func verifySignature(outputPath string) error {
 			trcs = append(trcs, fileInfo)
 		}
 	}
-	signedTopologyPath := path.Join(outputPath, signedTopologyFileName)
+
+	verifiedTopologyPath := path.Join(outputPath, topologyJSONFileName)
 	// Check against most recently fetched TRC first
 	sort.Sort(sort.Reverse(trcs))
 	for _, trc := range trcs {
 		trustAnchorTRCPath := path.Join(outputPath, "certs", trc.Name())
 		// Try to verify signature against all available TRCs
-		err = verifyTopologySignature(outputPath, signedTopologyPath, trustAnchorTRCPath)
+		err = verifyTopologySignature(outputPath, signedTopologyPath, trustAnchorTRCPath, verifiedTopologyPath)
 		if err == nil {
 			break
 		}
