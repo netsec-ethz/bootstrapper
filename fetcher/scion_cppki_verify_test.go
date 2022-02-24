@@ -195,9 +195,9 @@ func TestVerify(t *testing.T) {
 	}
 	// Dump files payload, isd17ASffaa_0_1101CAcrt, isd17ASffaa_1_1aspem, isd17ASffaa_1_1cpASkey to directory sign
 	files := map[string]string{
-		"payload": payload,
+		"payload":                    payload,
 		"ISD17-ASffaa_0_1101.ca.crt": isd17ASffaa_0_1101CAcrt,
-		"ISD17-ASffaa_1_1.as.pem": isd17ASffaa_1_1aspem,
+		"ISD17-ASffaa_1_1.as.pem":    isd17ASffaa_1_1aspem,
 		"ISD17-ASffaa_1_1.cp.as.key": isd17ASffaa_1_1cpASkey}
 	for fileName, fileContent := range files {
 		filePath := path.Join(outputPath, fileName)
@@ -211,7 +211,7 @@ func TestVerify(t *testing.T) {
 	asKeyPath := path.Join(outputPath, "ISD17-ASffaa_1_1.cp.as.key")
 	asCertPath := path.Join(outputPath, "ISD17-ASffaa_1_1.as.pem")
 	caCertPath := path.Join(outputPath, "ISD17-ASffaa_0_1101.ca.crt")
-	err = exec.Command( "openssl", "cms", "-sign", "-text",
+	err = exec.Command("openssl", "cms", "-sign", "-text",
 		"-in", payloadPath, "-out", signedPayloadPath, "-inkey", asKeyPath,
 		"-signer", asCertPath, "-certfile", caCertPath).Run()
 	if err != nil {
@@ -250,8 +250,11 @@ func TestVerify(t *testing.T) {
 		log.Error("Failed writing TRC file", "err", err)
 	}
 
-	// run the actual test, verifying the signature using only the signed payload and the TRC
-	if err := verifyTopologySignature(outputPath, payloadPath, trcPath); err != nil {
+	verifiedTopologyPath := path.Join(outputPath, topologyJSONFileName)
+	// run the actual test, verifying the signature
+	// using the signed payload and the TRC, and the IA extracted from the topology
+	if err := verifyTopologySignature(outputPath, "17-ffaa:1:1", payloadPath, trcPath, verifiedTopologyPath);
+		err != nil {
 		log.Error("Signature verification failed: verifyTopologySignature", "err", err)
 		t.FailNow()
 	}

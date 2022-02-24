@@ -16,13 +16,18 @@ package fetcher
 
 import (
 	"context"
+	"crypto/x509"
+	"encoding/asn1"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path"
+	"regexp"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -30,22 +35,27 @@ type topoIA struct {
 	IA string `json:"isd_as"`
 }
 
-func verifyTopologySignature(bootstrapperPath, signedTopology, trustAnchorTRC, verifiedTopology string) error {
+func verifyTopologySignature(bootstrapperPath, unverifiedIA,
+	signedTopology, trustAnchorTRC, verifiedTopology string) error {
+
+	// TODO: change stringly typed function parameters
+
 	// The signature is of the type:
 	// openssl cms -sign -text -in topology -out topology.signed -inkey as.key -signer as.cert.pem -certfile ca.cert.pem
 
-	// Low-code implementation, verify the signature only using standard tools
-	// and the existing functionality of the `scion-pki` tool to verify a two level certificate chain
+	// Verify the signature using openssl, and do some additional checks between the payload and the signer cert.
+	// Use the existing functionality of the `scion-pki` tool to verify a two level certificate chain
 	// consisting of (as_cert, ca_cert) back to a TRC (chain) with included root_certs.
 
 	// Signature verification should complete in a timely manner since it is a local operation
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	err := exec.CommandContext(ctx, "which", "openssl", "scion-pki").Run()
-	if err != nil {
-		return fmt.Errorf("signature verification failed:"+
-			"standard tools `openssl`, or `scion-pki` not found: %w", err)
+	for _, tool := range []string{"openssl", "scion-pki"} {
+		_, err := exec.LookPath(tool)
+		if err != nil {
+			return fmt.Errorf("signature verification failed: %w", err)
+		}
 	}
 
 	// Verify signed payload
@@ -53,7 +63,7 @@ func verifyTopologySignature(bootstrapperPath, signedTopology, trustAnchorTRC, v
 	rootCertsBundleName := trcFileName + ".certs.pem"
 	rootCertsBundlePath := path.Join(bootstrapperPath, rootCertsBundleName)
 	// extract TRC certificates:
-	err = exec.CommandContext(ctx, "scion-pki", "trc", "extract", "certificates",
+	err := exec.CommandContext(ctx, "scion-pki", "trc", "extract", "certificates",
 		trustAnchorTRC, "-o", rootCertsBundlePath).Run()
 	if err != nil {
 		return fmt.Errorf("signature verification failed: unable to extract root certificates from TRC %s: %w",
@@ -75,20 +85,54 @@ func verifyTopologySignature(bootstrapperPath, signedTopology, trustAnchorTRC, v
 		return fmt.Errorf("certificate validation failed: unable to detach signature: %w", err)
 	}
 
-	asCertChain := path.Join(bootstrapperPath, "as_cert_chain.pem")
+	asCertHumanChain := path.Join(bootstrapperPath, "as_cert_chain.human.pem")
 	// collect included certificates from detached signature:
-	shellCommand := fmt.Sprintf(
-		"openssl pkcs7 -in %s -inform PEM -print_certs | grep -v \"issuer\\|subject\" | grep . > %s",
-		detachedSignaturePath, asCertChain)
-	err = exec.CommandContext(ctx, "bash", "-c", shellCommand).Run()
+	err = exec.CommandContext(ctx, "openssl", "pkcs7", "-in", detachedSignaturePath,
+		"-inform", "PEM", "-print_certs", "-out", asCertHumanChain).Run()
 	if err != nil {
 		return fmt.Errorf("certificate validation failed: "+
 			"unable to gather included certificates from signature: %w", err)
 	}
 
+	// Split signer and ca certificate
+	rawASCertHumanChain, _ := os.ReadFile(asCertHumanChain)
+	re := regexp.MustCompile("-*?BEGIN CERTIFICATE-*?\\n[\\s\\S]*-*?END CERTIFICATE-*?\\n")
+	matches := re.FindAllString(string(rawASCertHumanChain), -1)
+
+	asCertRaw := []byte(matches[0])
+	rawASCertPem, _ := pem.Decode(asCertRaw)
+	if rawASCertPem != nil {
+		asCertRaw = rawASCertPem.Bytes
+	}
+	cert, err := x509.ParseCertificate(asCertRaw)
+	if err != nil {
+		return fmt.Errorf("certificate validation failed: "+
+			"unable to parse signer certificates from signature: %w", err)
+	}
+
+	// Check signer AS ID matches unverifiedIA
+	certSubjectASID := ""
+	OIDNameIA := asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 55324, 1, 2, 1}
+	for _, dn := range cert.Subject.Names {
+		if dn.Type.Equal(OIDNameIA) {
+			certSubjectASID = dn.Value.(string)
+			break
+		}
+	}
+	if certSubjectASID != unverifiedIA {
+		return fmt.Errorf("certificate validation failed: "+
+			"signer AS certificate subject does not match AS ID included in topology: "+
+			"expected: %s, actual: %s", unverifiedIA, certSubjectASID)
+	}
+
+	// Store certificate chain extracted from signature
+	asCertChainPath := path.Join(bootstrapperPath, "as_cert_chain.pem")
+	rawASCertChain := strings.Join(matches, "\n")
+	_ = os.WriteFile(asCertChainPath, []byte(rawASCertChain), 0666)
+
 	// verify AS certificate chain back to TRC:
 	err = exec.CommandContext(ctx, "scion-pki", "certificate", "verify",
-		"--trc", trustAnchorTRC, asCertChain).Run()
+		"--trc", trustAnchorTRC, asCertChainPath).Run()
 	if err != nil {
 		return fmt.Errorf("certificate validation failed: unable to validate certificate chain: %w", err)
 	}
@@ -108,19 +152,20 @@ func verifySignature(outputPath string) error {
 	bootstrapperPath := path.Join(outputPath, "bootstrapper")
 	err := os.Mkdir(bootstrapperPath, 0777)
 	if err != nil {
-		return fmt.Errorf("Failed to create bootstrapper intermediate directory", "dir", bootstrapperPath, "err", err)
+		return fmt.Errorf("Failed to create bootstrapper intermediate directory: " +
+			"dir: %s, err: %w", bootstrapperPath, err)
 	}
 	timestamp := time.Now().Unix()
 	bootstrapperPath = path.Join(outputPath, "bootstrapper", fmt.Sprintf("verify-%d", timestamp))
 	err = os.Mkdir(bootstrapperPath, 0777)
 	if err != nil {
-		return fmt.Errorf("Failed to create verify directory", "dir", bootstrapperPath, "err", err)
+		return fmt.Errorf("Failed to create verify directory: dir: %s, err: %w", bootstrapperPath, err)
 	}
 
 	// extract unverified payload
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	unverifiedTopologyPath := path.Join(bootstrapperPath, topologyJSONFileName)
+	unverifiedTopologyPath := path.Join(bootstrapperPath, topologyJSONFileName+".unverified")
 	err = exec.CommandContext(ctx, "openssl", "cms", "-verify", "-noverify",
 		"-in", signedTopologyPath, "-text", "-noout", "-out", unverifiedTopologyPath).Run()
 	if err != nil {
@@ -136,9 +181,8 @@ func verifySignature(outputPath string) error {
 	if err != nil {
 		return fmt.Errorf("Parsing unverified payload failed: %w", err)
 	}
-
-	// Check if ISD ID in topology matches TRC
-	// TODO: extract ISD ID from TRC
+	ids := strings.Split(topoIA.IA, "-")
+	trcID := ids[0]
 
 	files, err := os.ReadDir(path.Join(outputPath, "certs"))
 	if err != nil {
@@ -160,13 +204,32 @@ func verifySignature(outputPath string) error {
 	sort.Sort(sort.Reverse(trcs))
 	for _, trc := range trcs {
 		trustAnchorTRCPath := path.Join(outputPath, "certs", trc.Name())
-		// Try to verify signature against all available TRCs
-		err = verifyTopologySignature(outputPath, signedTopologyPath, trustAnchorTRCPath, verifiedTopologyPath)
+		v, _ := os.ReadFile(trustAnchorTRCPath)
+		var trc trcSummary
+		_, err = asn1.Unmarshal(v, &trc)
+		if fmt.Sprint(trc.ID.ISD) != trcID {
+			continue
+		}
+		// Try to verify signature against all available TRCs matching the ISD claimed by the topology
+		// TRC validity (expiration and grace period is checked by the call to `scion-pki`
+		// The signer AS needs to match the unverifiedASid claimed by the topology.
+		unverifiedIA := topoIA.IA
+		err = verifyTopologySignature(outputPath, unverifiedIA,
+			signedTopologyPath, trustAnchorTRCPath, verifiedTopologyPath)
 		if err == nil {
 			break
 		}
 	}
 	return err
+}
+
+// asn1ID is used to encode and decode the TRC ID.
+type asn1ID struct {
+	ISD int64 `asn1:"iSD"`
+}
+
+type trcSummary struct {
+	ID asn1ID `asn1:"iD"`
 }
 
 type sortedFiles []fs.FileInfo
