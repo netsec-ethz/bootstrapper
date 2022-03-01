@@ -18,8 +18,8 @@ const bootstrapperSample = `
 # The folder where the retrieved topology and certificates are stored (default ".")
 sciond_config_dir = "."
 
-# Skip the verification of the signature of the configuration file using the TRC (default false)
-insecure = false
+# Set the verification behavior of the signature of the configuration file using the TRC (default permissive)
+security_mode = insecure
 
 # Discovery mechanisms
 [mock]

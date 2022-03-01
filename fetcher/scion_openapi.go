@@ -28,6 +28,8 @@ import (
 	"golang.org/x/net/context/ctxhttp"
 
 	log "github.com/inconshreveable/log15"
+
+	"github.com/netsec-ethz/bootstrapper/config"
 	// "github.com/scionproto/scion/go/lib/topology"
 	// "github.com/scionproto/scion/go/pkg/cs/api"
 )
@@ -43,12 +45,12 @@ const (
 	httpRequestTimeout        = 2 * time.Second
 )
 
-func FetchConfiguration(outputPath string, insecure bool, addr *net.TCPAddr) error {
+func FetchConfiguration(outputPath string, securityMode config.SecurityMode, addr *net.TCPAddr) error {
 	err := PullTRCs(outputPath, addr)
 	if err != nil {
 		return err
 	}
-	if insecure {
+	if securityMode == config.Insecure {
 		err = PullTopology(outputPath, addr)
 	} else {
 		err = PullSignedTopology(outputPath, addr)
@@ -156,6 +158,8 @@ func PullTRC(outputPath string, addr *net.TCPAddr, trcID TRCID) error {
 	}
 	trcPath := path.Join(outputPath, "certs",
 		fmt.Sprintf("ISD%d-B%d-S%d.trc", trcID.Isd, trcID.BaseNumber, trcID.SerialNumber))
+	// TODO: do additional checks for security_mode permissive and strict to check TRC update chain
+	// TODO: mark TRCs downloaded in the insecure mode as such
 	if _, err := os.Stat(trcPath); os.IsNotExist(err) {
 		err = os.WriteFile(trcPath, raw, 0644)
 		if err != nil {

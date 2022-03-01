@@ -35,6 +35,14 @@ const (
 	DefaultLogLevel = "info"
 )
 
+type SecurityMode string
+
+const (
+	Strict     SecurityMode = "strict"     // only store a TRC if it validates against an existing TRC update chain
+	Permissive SecurityMode = "permissive" // only store a TRC if it does not conflict with an existing TRC update chain
+	Insecure   SecurityMode = "insecure"   // store any TRC, mark it as insecure, don't validate the topology signature
+)
+
 var (
 	version       bool
 	versionString string
@@ -46,7 +54,7 @@ var (
 type Config struct {
 	InterfaceName   string
 	SciondConfigDir string                        `toml:"sciond_config_dir"`
-	Insecure        bool                          `toml:"insecure,omitempty"`
+	SecurityMode    SecurityMode                  `toml:"security_mode,omitempty"`
 	MOCK            hinting.MOCKHintGeneratorConf `toml:"mock"`
 	DHCP            hinting.DHCPHintGeneratorConf `toml:"dhcp"`
 	DNSSD           hinting.DNSHintGeneratorConf  `toml:"dnssd"`
@@ -115,6 +123,9 @@ func (cfg *Config) InitDefaults() {
 	}
 	if cfg.SciondConfigDir == "" {
 		cfg.SciondConfigDir = "."
+	}
+	if cfg.SecurityMode == "" {
+		cfg.SecurityMode = Permissive
 	}
 }
 
