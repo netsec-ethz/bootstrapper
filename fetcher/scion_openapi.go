@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"sort"
 	"time"
 
 	"golang.org/x/net/context/ctxhttp"
@@ -46,7 +47,7 @@ const (
 )
 
 func FetchConfiguration(outputPath string, securityMode config.SecurityMode, addr *net.TCPAddr) error {
-	err := PullTRCs(outputPath, addr)
+	err := PullTRCs(outputPath, addr, securityMode)
 	if err != nil {
 		return err
 	}
@@ -124,20 +125,22 @@ type TRCID struct {
 	SerialNumber int `json:"serial_number"`
 }
 
-func PullTRCs(outputPath string, addr *net.TCPAddr) error {
+func PullTRCs(outputPath string, addr *net.TCPAddr, securityMode config.SecurityMode) error {
 	url := buildTRCsURL(addr.IP, addr.Port)
 	raw, err := fetchRawBytes("TRCs index", url)
 	if err != nil {
 		return err
 	}
 	// Get TRC identifiers
-	trcs := []TRCBrief{}
-	err = json.Unmarshal(raw, &trcs)
+	var trcs = new(sortedTRCBriefs)
+	err = json.Unmarshal(raw, trcs)
 	if err != nil {
 		return fmt.Errorf("unable to parse TRCs listing from JSON bytes: %w", err)
 	}
-	for _, trc := range trcs {
-		err = PullTRC(outputPath, addr, trc.Id)
+	// Sort TRCBriefs by ISD, serial and BaseNumber, to enable verifying the TRC update chain after each pull
+	sort.Sort(trcs)
+	for _, trc := range *trcs {
+		err = PullTRC(outputPath, addr, securityMode, trc.Id)
 		if err != nil {
 			log.Error("Failed to retrieve TRC", "trc", trc, "err", err)
 		}
@@ -150,23 +153,40 @@ func buildTRCsURL(ip net.IP, port int) string {
 	return fmt.Sprintf("http://%s:%d/%s", ip, port, urlPath)
 }
 
-func PullTRC(outputPath string, addr *net.TCPAddr, trcID TRCID) error {
+func PullTRC(outputPath string, addr *net.TCPAddr, securityMode config.SecurityMode, trcID TRCID) error {
 	url := buildTRCURL(addr.IP, addr.Port, trcID)
 	raw, err := fetchRawBytes("TRC", url)
 	if err != nil {
 		return err
 	}
+	// Mark TRCs downloaded in the insecure mode as such
 	trcPath := path.Join(outputPath, "certs",
-		fmt.Sprintf("ISD%d-B%d-S%d.trc", trcID.Isd, trcID.BaseNumber, trcID.SerialNumber))
-	// TODO: do additional checks for security_mode permissive and strict to check TRC update chain
-	// TODO: mark TRCs downloaded in the insecure mode as such
-	if _, err := os.Stat(trcPath); os.IsNotExist(err) {
-		err = os.WriteFile(trcPath, raw, 0644)
-		if err != nil {
-			return fmt.Errorf("bootstrapper could not store TRC: %w", err)
-		}
-	} else {
+		fmt.Sprintf("ISD%d-B%d-S%d.trc.insecure", trcID.Isd, trcID.BaseNumber, trcID.SerialNumber))
+	if securityMode != config.Insecure {
+		trcPath = path.Join(outputPath, "certs",
+			fmt.Sprintf("ISD%d-B%d-S%d.trc", trcID.Isd, trcID.BaseNumber, trcID.SerialNumber))
+	}
+	if _, err := os.Stat(trcPath); !os.IsNotExist(err) {
 		log.Debug("Identical TRC version already exists, not overwritting.", "trcPath", trcPath)
+	}
+	err = os.WriteFile(trcPath, raw, 0644)
+	if err != nil {
+		return fmt.Errorf("bootstrapper could not store TRC: %w", err)
+	}
+	// Do additional checks for security_mode permissive and strict to check TRC update chain
+	if securityMode != config.Insecure {
+		if _, err := os.Stat(trcPath); !os.IsNotExist(err) {
+			log.Debug("Identical TRC version already exists, not overwritting.", "trcPath", trcPath)
+		}
+		// TODO: do the actual TRC update chain check
+		switch securityMode {
+		case config.Permissive:
+			return fmt.Errorf("check not implemented: %v", securityMode)
+		case config.Strict:
+			return fmt.Errorf("check not implemented: %v", securityMode)
+		default:
+			return fmt.Errorf("invalid security mode: %v", securityMode)
+		}
 	}
 	return nil
 }
@@ -211,4 +231,25 @@ func fetchRawBytes(fileName string, url string) ([]byte, error) {
 		return nil, fmt.Errorf("unable to read from response body: %w", err)
 	}
 	return raw, nil
+}
+
+type sortedTRCBriefs []TRCBrief
+
+func (t sortedTRCBriefs) Len() int {
+	return len(t)
+}
+
+func (t sortedTRCBriefs) Swap(i, j int) {
+	t[i], t[j] = t[j], t[i]
+	return
+}
+
+func (t sortedTRCBriefs) Less(i, j int) bool {
+	if t[i].Id.Isd != t[j].Id.Isd {
+		return t[i].Id.Isd < t[j].Id.Isd
+	}
+	if t[i].Id.SerialNumber != t[j].Id.SerialNumber {
+		return t[i].Id.SerialNumber < t[j].Id.SerialNumber
+	}
+	return t[i].Id.BaseNumber < t[j].Id.BaseNumber
 }
