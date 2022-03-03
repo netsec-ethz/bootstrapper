@@ -24,6 +24,7 @@ import (
 	"os"
 	"path"
 	"sort"
+	"strings"
 	"time"
 
 	"golang.org/x/net/context/ctxhttp"
@@ -46,7 +47,7 @@ const (
 	httpRequestTimeout        = 2 * time.Second
 )
 
-func FetchConfiguration(outputPath string, securityMode config.SecurityMode, addr *net.TCPAddr) error {
+func FetchConfiguration(outputPath string, workingDir string, securityMode config.SecurityMode, addr *net.TCPAddr) error {
 	err := PullTRCs(outputPath, addr, securityMode)
 	if err != nil {
 		return err
@@ -54,11 +55,11 @@ func FetchConfiguration(outputPath string, securityMode config.SecurityMode, add
 	if securityMode == config.Insecure {
 		err = PullTopology(outputPath, addr)
 	} else {
-		err = PullSignedTopology(outputPath, addr)
+		err = PullSignedTopology(workingDir, addr)
 		if err != nil {
 			return err
 		}
-		err = verifySignature(outputPath)
+		err = verifySignature(outputPath, workingDir)
 	}
 	return err
 }
@@ -91,13 +92,13 @@ func buildTopologyURL(ip net.IP, port int) string {
 	return fmt.Sprintf("http://%s:%d/%s", ip, port, urlPath)
 }
 
-func PullSignedTopology(outputPath string, addr *net.TCPAddr) error {
+func PullSignedTopology(workingDir string, addr *net.TCPAddr) error {
 	url := buildSignedTopologyURL(addr.IP, addr.Port)
 	raw, err := fetchRawBytes("signed topology", url)
 	if err != nil {
 		return err
 	}
-	signedTopologyPath := path.Join(outputPath, signedTopologyFileName)
+	signedTopologyPath := path.Join(workingDir, signedTopologyFileName)
 	err = os.WriteFile(signedTopologyPath, raw, 0644)
 	if err != nil {
 		return fmt.Errorf("bootstrapper could not store topology signature: %w", err)
@@ -137,6 +138,20 @@ func PullTRCs(outputPath string, addr *net.TCPAddr, securityMode config.Security
 	if err != nil {
 		return fmt.Errorf("unable to parse TRCs listing from JSON bytes: %w", err)
 	}
+
+	if securityMode != config.Insecure {
+		// Wipe symlinks to TRCs fetched in insecure mode, if we are not using the insecure mode
+		err = wipeInsecureSymlinks(outputPath)
+		if err != nil {
+			log.Warn("Unable to remove symlinks to insecure TRCs", "err", err)
+		}
+		// Wipe old temporary directories, except last 10
+		err = cleanupVerifyDirs(outputPath)
+		if err != nil {
+			log.Info("Unable to remove old verify directories", "err", err)
+		}
+	}
+
 	// Sort TRCBriefs by ISD, serial and BaseNumber, to enable verifying the TRC update chain after each pull
 	sort.Sort(trcs)
 	for _, trc := range *trcs {
@@ -153,6 +168,47 @@ func buildTRCsURL(ip net.IP, port int) string {
 	return fmt.Sprintf("http://%s:%d/%s", ip, port, urlPath)
 }
 
+func wipeInsecureSymlinks(outputPath string) error {
+	// do a lstat on the directory
+	trcs, err := os.ReadDir(path.Join(outputPath, "certs"))
+	if err != nil {
+		return err
+	}
+	for _, trc := range trcs {
+		// ignore directories
+		if trc.IsDir() {
+			continue
+		}
+		// get file info
+		fInfo, err := trc.Info()
+		if err != nil {
+			return err
+		}
+		// ignore non-symlinks
+		if fInfo.Mode() & os.ModeSymlink != 1 {
+			continue
+		}
+		// stat the symlink, check if it links to a TRC from the insecure mode
+		fInfo, err = os.Stat(trc.Name())
+		if err != nil {
+			return err
+		}
+		if strings.HasSuffix(fInfo.Name(), ".insecure") {
+			// unlink
+			err = os.Remove(fInfo.Name())
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func cleanupVerifyDirs(outputPath string) error {
+	// TODO: do verify dir cleanup
+	return fmt.Errorf("not implemented, not cleaning up %s/verify-* directories", outputPath)
+}
+
 func PullTRC(outputPath string, addr *net.TCPAddr, securityMode config.SecurityMode, trcID TRCID) error {
 	url := buildTRCURL(addr.IP, addr.Port, trcID)
 	raw, err := fetchRawBytes("TRC", url)
@@ -167,7 +223,7 @@ func PullTRC(outputPath string, addr *net.TCPAddr, securityMode config.SecurityM
 			fmt.Sprintf("ISD%d-B%d-S%d.trc", trcID.Isd, trcID.BaseNumber, trcID.SerialNumber))
 	}
 	if _, err := os.Stat(trcPath); !os.IsNotExist(err) {
-		log.Debug("Identical TRC version already exists, not overwritting.", "trcPath", trcPath)
+		return fmt.Errorf("identical TRC version already exists, not overwritting: path: %s : %w", trcPath, err)
 	}
 	err = os.WriteFile(trcPath, raw, 0644)
 	if err != nil {
@@ -175,20 +231,23 @@ func PullTRC(outputPath string, addr *net.TCPAddr, securityMode config.SecurityM
 	}
 	// Do additional checks for security_mode permissive and strict to check TRC update chain
 	if securityMode != config.Insecure {
-		if _, err := os.Stat(trcPath); !os.IsNotExist(err) {
-			log.Debug("Identical TRC version already exists, not overwritting.", "trcPath", trcPath)
-		}
-		// TODO: do the actual TRC update chain check
 		switch securityMode {
 		case config.Permissive:
-			return fmt.Errorf("check not implemented: %v", securityMode)
+			err = verifyTRCUpdateChain(outputPath, trcPath, false)
 		case config.Strict:
-			return fmt.Errorf("check not implemented: %v", securityMode)
+			err = verifyTRCUpdateChain(outputPath, trcPath, true)
 		default:
-			return fmt.Errorf("invalid security mode: %v", securityMode)
+			err = fmt.Errorf("invalid security mode: %v", securityMode)
 		}
 	}
-	return nil
+	if err != nil {
+		// remove the TRC failing the update chain check
+		rerr := os.Remove(trcPath)
+		if rerr != nil {
+			return rerr
+		}
+	}
+	return err
 }
 
 func buildTRCURL(ip net.IP, port int, trc TRCID) string {

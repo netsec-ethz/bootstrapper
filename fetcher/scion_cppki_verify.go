@@ -146,18 +146,17 @@ func verifyTopologySignature(bootstrapperPath, unverifiedIA,
 	return nil
 }
 
-func verifySignature(outputPath string) error {
-	signedTopologyPath := path.Join(outputPath, signedTopologyFileName)
+func verifyTRCUpdateChain(outputPath, candidateTRCPath string, strict bool) error {
+	// TODO: do the actual TRC update chain check
+	return fmt.Errorf("check not implemented: strict mode: %v", strict)
+}
 
-	bootstrapperPath := path.Join(outputPath, "bootstrapper")
-	err := os.Mkdir(bootstrapperPath, 0777)
-	if err != nil {
-		return fmt.Errorf("Failed to create bootstrapper intermediate directory: " +
-			"dir: %s, err: %w", bootstrapperPath, err)
-	}
+func verifySignature(outputPath, workingDir string) error {
+	signedTopologyPath := path.Join(workingDir, signedTopologyFileName)
+
 	timestamp := time.Now().Unix()
-	bootstrapperPath = path.Join(outputPath, "bootstrapper", fmt.Sprintf("verify-%d", timestamp))
-	err = os.Mkdir(bootstrapperPath, 0777)
+	bootstrapperPath := path.Join(workingDir, fmt.Sprintf("verify-%d", timestamp))
+	err := os.Mkdir(bootstrapperPath, 0775)
 	if err != nil {
 		return fmt.Errorf("Failed to create verify directory: dir: %s, err: %w", bootstrapperPath, err)
 	}

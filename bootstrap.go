@@ -18,6 +18,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"os"
 	"sync"
 	"time"
 
@@ -41,6 +42,15 @@ type Bootstrapper struct {
 
 func NewBootstrapper(cfg *config.Config) (*Bootstrapper, error) {
 	log.Debug("Configuration loaded", "cfg", cfg)
+
+	// Ensure working directory exists
+	if _, err := os.Stat(config.WorkingDir); os.IsNotExist(err) {
+		err := os.Mkdir(config.WorkingDir, 0775)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create bootstrapper working directory: err: %w", err)
+		}
+	}
+
 	var iface *net.Interface
 	if cfg.DHCP.Enable || cfg.MDNS.Enable {
 		var err error
@@ -86,7 +96,7 @@ OuterLoop:
 			if serverAddr.Port == 0 {
 				serverAddr.Port = int(hinting.DiscoveryPort)
 			}
-			err := fetcher.FetchConfiguration(cfg.SciondConfigDir, cfg.SecurityMode, serverAddr)
+			err := fetcher.FetchConfiguration(cfg.SciondConfigDir, config.WorkingDir, cfg.SecurityMode, serverAddr)
 			if err != nil {
 				return err
 			}

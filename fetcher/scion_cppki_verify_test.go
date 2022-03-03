@@ -182,14 +182,14 @@ var payload = `{
 
 func TestVerify(t *testing.T) {
 	tmpDir := path.Join(os.TempDir(), "bootstrapper-cppki-tests")
-	err := os.MkdirAll(tmpDir, 0777)
+	err := os.MkdirAll(tmpDir, 0775)
 	if err != nil {
 		log.Error("Failed to create test directory for testrun", "dir", tmpDir, "err", err)
 	}
 
 	// Generate signed payload
 	outputPath := path.Join(tmpDir, "sign")
-	err = os.Mkdir(outputPath, 0777)
+	err = os.Mkdir(outputPath, 0775)
 	if err != nil {
 		log.Error("Failed to create verify test directory for testrun", "dir", tmpDir, "err", err)
 	}
@@ -220,7 +220,7 @@ func TestVerify(t *testing.T) {
 
 	// Verify signed payload
 	outputPath = path.Join(tmpDir, "verify")
-	err = os.Mkdir(outputPath, 0777)
+	err = os.Mkdir(outputPath, 0775)
 	if err != nil {
 		log.Error("Failed to create verify test directory for testrun", "dir", tmpDir, "err", err)
 	}

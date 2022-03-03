@@ -23,6 +23,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"path"
 
 	"github.com/inconshreveable/log15"
 	"github.com/pelletier/go-toml"
@@ -49,6 +50,7 @@ var (
 	helpConfig    bool
 	configPath    string
 	IfaceName     string
+	WorkingDir    string
 )
 
 type Config struct {
@@ -127,6 +129,7 @@ func (cfg *Config) InitDefaults() {
 	if cfg.SecurityMode == "" {
 		cfg.SecurityMode = Permissive
 	}
+	WorkingDir = path.Join(cfg.SciondConfigDir, "bootstrapper")
 }
 
 func (cfg *Config) Validate() error {
