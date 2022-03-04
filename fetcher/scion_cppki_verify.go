@@ -147,8 +147,40 @@ func verifyTopologySignature(bootstrapperPath, unverifiedIA,
 }
 
 func verifyTRCUpdateChain(outputPath, candidateTRCPath string, strict bool) error {
-	// TODO: do the actual TRC update chain check
-	return fmt.Errorf("check not implemented: strict mode: %v", strict)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	v, _ := os.ReadFile(candidateTRCPath)
+	var trc trcSummary
+	_, err := asn1.Unmarshal(v, &trc)
+	if err != nil {
+		return fmt.Errorf("validating TRC update chain failed: %w", err)
+	}
+	candidateTRCid := trc.ID.ISD
+	trcs, err := os.ReadDir(path.Join(outputPath, "certs"))
+	if err != nil {
+		return err
+	}
+	var trcUpdateChain []string
+	for _, trc := range trcs {
+		if strings.HasPrefix(trc.Name(), fmt.Sprintf("%d-", candidateTRCid)) {
+			// TODO: sort TRCs in the update chain, possibly sanitize trc.Name()
+			trcUpdateChain = append(trcUpdateChain, trc.Name())
+		}
+	}
+	if len(trcUpdateChain) == 0 {
+		if strict {
+			return fmt.Errorf("validating TRC update chain failed: strict mode requires TRC anchor")
+		}
+		return nil
+	}
+	cmdArgs := []string{"trc", "-verify", "--anchor"}
+	cmdArgs = append(cmdArgs, trcUpdateChain...)
+	cmdArgs = append(cmdArgs, candidateTRCPath)
+	err = exec.CommandContext(ctx, "scion-pki", cmdArgs...).Run()
+	if err != nil {
+		return fmt.Errorf("validating TRC update chain failed: %w", err)
+	}
+	return nil
 }
 
 func verifySignature(outputPath, workingDir string) error {
@@ -206,7 +238,7 @@ func verifySignature(outputPath, workingDir string) error {
 		v, _ := os.ReadFile(trustAnchorTRCPath)
 		var trc trcSummary
 		_, err = asn1.Unmarshal(v, &trc)
-		if fmt.Sprint(trc.ID.ISD) != trcID {
+		if err!= nil || fmt.Sprint(trc.ID.ISD) != trcID {
 			continue
 		}
 		// Try to verify signature against all available TRCs matching the ISD claimed by the topology
