@@ -29,6 +29,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	log "github.com/inconshreveable/log15"
 )
 
 type topoIA struct {
@@ -187,8 +189,14 @@ func verifySignature(outputPath, workingDir string) error {
 	signedTopologyPath := path.Join(workingDir, signedTopologyFileName)
 
 	timestamp := time.Now().Unix()
+	// Wipe old temporary directories, except last 10
+	err := cleanupVerifyDirs(workingDir)
+	if err != nil {
+		log.Info("Unable to remove old verify directories", "err", err)
+	}
+	// Create verify directory
 	bootstrapperPath := path.Join(workingDir, fmt.Sprintf("verify-%d", timestamp))
-	err := os.Mkdir(bootstrapperPath, 0775)
+	err = os.Mkdir(bootstrapperPath, 0775)
 	if err != nil {
 		return fmt.Errorf("Failed to create verify directory: dir: %s, err: %w", bootstrapperPath, err)
 	}
@@ -252,6 +260,28 @@ func verifySignature(outputPath, workingDir string) error {
 		}
 	}
 	return err
+}
+
+func cleanupVerifyDirs(workingDir string) error {
+	oldVerifyDirs, err := os.ReadDir(workingDir)
+	if err != nil {
+		return err
+	}
+	// Sort alpha-numerically, delete all except last 10
+	var deleteCandidates []string
+	for _, d := range oldVerifyDirs {
+		if d.IsDir() && strings.HasPrefix(d.Name(), "verify-") {
+			deleteCandidates = append(deleteCandidates, d.Name())
+		}
+	}
+	sort.Strings(deleteCandidates)
+	for _, d := range deleteCandidates[:len(deleteCandidates)-10] {
+		err = os.Remove(path.Join(workingDir, d))
+		if err != nil {
+			log.Info("Unable to remove old verify directory", "err", err)
+		}
+	}
+	return nil
 }
 
 // asn1ID is used to encode and decode the TRC ID.

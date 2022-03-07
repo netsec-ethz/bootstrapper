@@ -145,11 +145,6 @@ func PullTRCs(outputPath string, addr *net.TCPAddr, securityMode config.Security
 		if err != nil {
 			log.Warn("Unable to remove symlinks to insecure TRCs", "err", err)
 		}
-		// Wipe old temporary directories, except last 10
-		err = cleanupVerifyDirs(outputPath)
-		if err != nil {
-			log.Info("Unable to remove old verify directories", "err", err)
-		}
 	}
 
 	// Sort TRCBriefs by ISD, serial and BaseNumber, to enable verifying the TRC update chain after each pull
@@ -202,11 +197,6 @@ func wipeInsecureSymlinks(outputPath string) error {
 		}
 	}
 	return nil
-}
-
-func cleanupVerifyDirs(outputPath string) error {
-	// TODO: do verify dir cleanup
-	return fmt.Errorf("not implemented, not cleaning up %s/verify-* directories", outputPath)
 }
 
 func PullTRC(outputPath string, addr *net.TCPAddr, securityMode config.SecurityMode, trcID TRCID) error {
