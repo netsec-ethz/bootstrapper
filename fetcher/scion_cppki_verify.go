@@ -164,8 +164,8 @@ func verifyTRCUpdateChain(outputPath, candidateTRCPath string, strict bool) erro
 	}
 	var trcUpdateChain []string
 	for _, trc := range trcs {
-		if strings.HasPrefix(trc.Name(), fmt.Sprintf("%d-", candidateTRCid)) {
-			// TODO: sort TRCs in the update chain, possibly sanitize trc.Name()
+		if strings.HasPrefix(trc.Name(), fmt.Sprintf("%d-", candidateTRCid)) && strings.HasSuffix(trc.Name(),
+			".trc") {
 			trcUpdateChain = append(trcUpdateChain, trc.Name())
 		}
 	}
@@ -175,6 +175,7 @@ func verifyTRCUpdateChain(outputPath, candidateTRCPath string, strict bool) erro
 		}
 		return nil
 	}
+	trcUpdateChain = sortTRCsFiles(trcUpdateChain)
 	cmdArgs := []string{"trc", "-verify", "--anchor"}
 	cmdArgs = append(cmdArgs, trcUpdateChain...)
 	cmdArgs = append(cmdArgs, candidateTRCPath)
@@ -183,6 +184,30 @@ func verifyTRCUpdateChain(outputPath, candidateTRCPath string, strict bool) erro
 		return fmt.Errorf("validating TRC update chain failed: %w", err)
 	}
 	return nil
+}
+
+func sortTRCsFiles(trcUpdateChain []string) []string {
+	var trcFileSummaries sortedTRCFileSummaries
+	for _, filePath := range trcUpdateChain {
+		v, err := os.ReadFile(filePath)
+		if err != nil {
+			log.Error("reading TRC file %s failed: %w", filePath, err)
+			continue
+		}
+		var trc trcSummary
+		_, err = asn1.Unmarshal(v, &trc)
+		if err != nil {
+			log.Error("parsing TRC file %s failed: %w", filePath, err)
+			continue
+		}
+		trcFileSummaries = append(trcFileSummaries, trcFileSummary{trc: trc, path: filePath})
+	}
+	// sort from lowest TRC ISD ID, base number and serial number to highest, in that order
+	sort.Sort(trcFileSummaries)
+	for _, trcSummary := range trcFileSummaries {
+		trcUpdateChain = append(trcUpdateChain, trcSummary.path)
+	}
+	return trcUpdateChain
 }
 
 func verifySignature(outputPath, workingDir string) error {
@@ -243,10 +268,13 @@ func verifySignature(outputPath, workingDir string) error {
 	sort.Sort(sort.Reverse(trcs))
 	for _, trc := range trcs {
 		trustAnchorTRCPath := path.Join(outputPath, "certs", trc.Name())
-		v, _ := os.ReadFile(trustAnchorTRCPath)
+		v, err := os.ReadFile(trustAnchorTRCPath)
+		if err != nil {
+			continue
+		}
 		var trc trcSummary
 		_, err = asn1.Unmarshal(v, &trc)
-		if err!= nil || fmt.Sprint(trc.ID.ISD) != trcID {
+		if err != nil || fmt.Sprint(trc.ID.ISD) != trcID {
 			continue
 		}
 		// Try to verify signature against all available TRCs matching the ISD claimed by the topology
@@ -284,9 +312,42 @@ func cleanupVerifyDirs(workingDir string) error {
 	return nil
 }
 
+type trcFileSummary struct {
+	trc trcSummary
+	path string
+}
+
+type sortedTRCFileSummaries []trcFileSummary
+
+func (s sortedTRCFileSummaries) Len() int {
+	return len(s)
+}
+
+func (s sortedTRCFileSummaries) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+	return
+}
+
+func (s sortedTRCFileSummaries) Less(i, j int) bool {
+	// compare TRC ISD ID, base number and serial number, in that order
+	if s[i].trc.ID.ISD < s[j].trc.ID.ISD {
+		return true
+	} else if s[i].trc.ID.ISD > s[j].trc.ID.ISD {
+		return false
+	}
+	if s[i].trc.ID.Base < s[j].trc.ID.Base {
+		return true
+	} else if s[i].trc.ID.Base > s[j].trc.ID.Base {
+		return false
+	}
+	return s[i].trc.ID.Serial < s[j].trc.ID.Serial
+}
+
 // asn1ID is used to encode and decode the TRC ID.
 type asn1ID struct {
-	ISD int64 `asn1:"iSD"`
+	ISD    int64 `asn1:"iSD"`
+	Serial int64 `asn1:"serialNumber"`
+	Base   int64 `asn1:"baseNumber"`
 }
 
 type trcSummary struct {
