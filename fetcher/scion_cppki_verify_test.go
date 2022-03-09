@@ -253,7 +253,7 @@ func TestVerify(t *testing.T) {
 	verifiedTopologyPath := path.Join(outputPath, topologyJSONFileName)
 	// run the actual test, verifying the signature
 	// using the signed payload and the TRC, and the IA extracted from the topology
-	if err := verifyTopologySignature(outputPath, "17-ffaa:1:1", payloadPath, trcPath, verifiedTopologyPath);
+	if err := verifyTopologySignature(outputPath, "17-ffaa:1:1", payloadPath, verifiedTopologyPath, []string{trcPath});
 		err != nil {
 		log.Error("Signature verification failed: verifyTopologySignature", "err", err)
 		t.FailNow()

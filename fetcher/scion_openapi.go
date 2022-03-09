@@ -48,7 +48,7 @@ const (
 )
 
 func FetchConfiguration(outputPath string, workingDir string, securityMode config.SecurityMode, addr *net.TCPAddr) error {
-	err := PullTRCs(outputPath, addr, securityMode)
+	err := PullTRCs(outputPath, workingDir, addr, securityMode)
 	if err != nil {
 		return err
 	}
@@ -126,7 +126,7 @@ type TRCID struct {
 	SerialNumber int `json:"serial_number"`
 }
 
-func PullTRCs(outputPath string, addr *net.TCPAddr, securityMode config.SecurityMode) error {
+func PullTRCs(outputPath, workingDir string, addr *net.TCPAddr, securityMode config.SecurityMode) error {
 	url := buildTRCsURL(addr.IP, addr.Port)
 	raw, err := fetchRawBytes("TRCs index", url)
 	if err != nil {
@@ -150,7 +150,7 @@ func PullTRCs(outputPath string, addr *net.TCPAddr, securityMode config.Security
 	// Sort TRCBriefs by ISD, serial and BaseNumber, to enable verifying the TRC update chain after each pull
 	sort.Sort(trcs)
 	for _, trc := range *trcs {
-		err = PullTRC(outputPath, addr, securityMode, trc.Id)
+		err = PullTRC(outputPath, workingDir, addr, securityMode, trc.Id)
 		if err != nil {
 			log.Error("Failed to retrieve TRC", "trc", trc, "err", err)
 		}
@@ -199,42 +199,53 @@ func wipeInsecureSymlinks(outputPath string) error {
 	return nil
 }
 
-func PullTRC(outputPath string, addr *net.TCPAddr, securityMode config.SecurityMode, trcID TRCID) error {
+func PullTRC(outputPath, workingDir string, addr *net.TCPAddr, securityMode config.SecurityMode, trcID TRCID) error {
 	url := buildTRCURL(addr.IP, addr.Port, trcID)
 	raw, err := fetchRawBytes("TRC", url)
 	if err != nil {
 		return err
 	}
 	// Mark TRCs downloaded in the insecure mode as such
-	trcPath := path.Join(outputPath, "certs",
+	tmpTRCpath := path.Join(workingDir,
 		fmt.Sprintf("ISD%d-B%d-S%d.trc.insecure", trcID.Isd, trcID.BaseNumber, trcID.SerialNumber))
-	if securityMode != config.Insecure {
-		trcPath = path.Join(outputPath, "certs",
-			fmt.Sprintf("ISD%d-B%d-S%d.trc", trcID.Isd, trcID.BaseNumber, trcID.SerialNumber))
-	}
+	trcPath := path.Join(outputPath, "certs",
+		fmt.Sprintf("ISD%d-B%d-S%d.trc", trcID.Isd, trcID.BaseNumber, trcID.SerialNumber))
 	if _, err := os.Stat(trcPath); !os.IsNotExist(err) {
-		return fmt.Errorf("identical TRC version already exists, not overwritting: path: %s : %w", trcPath, err)
+		log.Info("identical TRC version already exists, not overwritting: path: %s : %w", trcPath, err)
+		return nil
 	}
-	err = os.WriteFile(trcPath, raw, 0644)
+	err = os.WriteFile(tmpTRCpath, raw, 0644)
 	if err != nil {
 		return fmt.Errorf("bootstrapper could not store TRC: %w", err)
 	}
-	// Do additional checks for security_mode permissive and strict to check TRC update chain
-	if securityMode != config.Insecure {
-		switch securityMode {
-		case config.Permissive:
-			err = verifyTRCUpdateChain(outputPath, trcPath, false)
-		case config.Strict:
-			err = verifyTRCUpdateChain(outputPath, trcPath, true)
-		default:
-			err = fmt.Errorf("invalid security mode: %v", securityMode)
-		}
+	// Do additional checks for security_mode permissive and strict to check the TRC update chain
+	switch securityMode {
+	case config.Permissive:
+		err = verifyTRCUpdateChain(outputPath, tmpTRCpath, false)
+	case config.Strict:
+		err = verifyTRCUpdateChain(outputPath, tmpTRCpath, true)
+	default:
+		return fmt.Errorf("invalid security mode: %v", securityMode)
 	}
 	if err != nil {
 		// remove the TRC failing the update chain check
-		rerr := os.Remove(trcPath)
+		rerr := os.Remove(tmpTRCpath)
 		if rerr != nil {
 			return rerr
+		}
+		return err
+	}
+	if securityMode == config.Insecure {
+		// symlink the TRC fetched in insecure mode into the standard directory
+		err = os.Symlink(trcPath,  tmpTRCpath)
+		if err != nil {
+			return fmt.Errorf("symlinking insecure TRC failed: %w", err)
+		}
+	} else {
+		// move the TRC to the standard directory
+		err = os.Rename(tmpTRCpath, trcPath)
+		if err != nil {
+			return fmt.Errorf("moving validated TRC failed: %w", err)
 		}
 	}
 	return err
