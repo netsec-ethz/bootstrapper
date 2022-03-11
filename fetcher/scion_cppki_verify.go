@@ -60,7 +60,10 @@ func verifyTopologySignature(bootstrapperPath, unverifiedIA,
 		}
 	}
 
-	// Verify signed payload
+	// Verify signed payload:
+	if len(trcPaths) < 1 {
+		return fmt.Errorf("signature verification failed: TRC trust anchor required, none provided")
+	}
 	trustAnchorTRC := trcPaths[0]
 	_, trcFileName := path.Split(trustAnchorTRC)
 	rootCertsBundleName := trcFileName + ".certs.pem"
@@ -159,19 +162,19 @@ func verifyTRCUpdateChain(outputPath, candidateTRCPath string, strict bool) erro
 		return fmt.Errorf("validating TRC update chain failed: %w", err)
 	}
 	candidateTRCid := trc.ID.ISD
-	trcUpdateChain, err := getTRCsByISDid(outputPath, candidateTRCid)
+	trcs, err := getTRCsByISDid(outputPath, candidateTRCid)
 	if err != nil {
 		return err
 	}
-	if len(trcUpdateChain) == 0 {
+	if len(trcs) == 0 {
 		if strict {
 			return fmt.Errorf("validating TRC update chain failed: strict mode requires TRC anchor")
 		}
 		return nil
 	}
-	trcUpdateChain = sortTRCsFiles(trcUpdateChain)
+	trcUpdateChainPaths := sortTRCsFiles(trcs).Paths()
 	cmdArgs := []string{"trc", "-verify", "--anchor"}
-	cmdArgs = append(cmdArgs, trcUpdateChain...)
+	cmdArgs = append(cmdArgs, trcUpdateChainPaths...)
 	cmdArgs = append(cmdArgs, candidateTRCPath)
 	err = exec.CommandContext(ctx, "scion-pki", cmdArgs...).Run()
 	if err != nil {
@@ -180,24 +183,17 @@ func verifyTRCUpdateChain(outputPath, candidateTRCPath string, strict bool) erro
 	return nil
 }
 
-func getTRCsByISDid(outputPath string, isdID int64) ([]string, error) {
+func getTRCsByISDid(outputPath string, isdID int64) ([]trcFileSummary, error) {
 	trcs, err := os.ReadDir(path.Join(outputPath, "certs"))
 	if err != nil {
 		return nil, err
 	}
-	var isdTRCs []string
-	for _, trc := range trcs {
-		if strings.HasPrefix(trc.Name(), fmt.Sprintf("%d-", isdID)) && strings.HasSuffix(trc.Name(),
-			".trc") {
-			isdTRCs = append(isdTRCs, trc.Name())
+	var isdTRCs []trcFileSummary
+	for _, trcName := range trcs {
+		if !strings.HasSuffix(trcName.Name(), ".trc") {
+			continue
 		}
-	}
-	return isdTRCs, nil
-}
-
-func sortTRCsFiles(trcUpdateChain []string) []string {
-	var trcFileSummaries sortedTRCFileSummaries
-	for _, filePath := range trcUpdateChain {
+		filePath := path.Join(outputPath, "certs", trcName.Name())
 		v, err := os.ReadFile(filePath)
 		if err != nil {
 			log.Error("reading TRC file %s failed: %w", filePath, err)
@@ -209,14 +205,17 @@ func sortTRCsFiles(trcUpdateChain []string) []string {
 			log.Error("parsing TRC file %s failed: %w", filePath, err)
 			continue
 		}
-		trcFileSummaries = append(trcFileSummaries, trcFileSummary{trc: trc, path: filePath})
+		if trc.ID.ISD == isdID {
+			isdTRCs = append(isdTRCs, trcFileSummary{trc: trc, path: filePath})
+		}
 	}
+	return isdTRCs, nil
+}
+
+func sortTRCsFiles(trcFileSummaries []trcFileSummary) (trcUpdateChain sortedTRCFileSummaries) {
 	// sort from lowest TRC ISD ID, base number and serial number to highest, in that order
-	sort.Sort(trcFileSummaries)
-	for _, trcSummary := range trcFileSummaries {
-		trcUpdateChain = append(trcUpdateChain, trcSummary.path)
-	}
-	return trcUpdateChain
+	sort.Sort(sortedTRCFileSummaries(trcFileSummaries))
+	return trcFileSummaries
 }
 
 func verifySignature(outputPath, workingDir string) error {
@@ -232,7 +231,7 @@ func verifySignature(outputPath, workingDir string) error {
 	bootstrapperPath := path.Join(workingDir, fmt.Sprintf("verify-%d", timestamp))
 	err = os.Mkdir(bootstrapperPath, 0775)
 	if err != nil {
-		return fmt.Errorf("Failed to create verify directory: dir: %s, err: %w", bootstrapperPath, err)
+		return fmt.Errorf("failed to create verify directory: dir: %s, err: %w", bootstrapperPath, err)
 	}
 
 	// extract unverified payload
@@ -247,12 +246,12 @@ func verifySignature(outputPath, workingDir string) error {
 
 	unverifiedTopo, err := os.ReadFile(unverifiedTopologyPath)
 	if err != nil {
-		return fmt.Errorf("Reading unverified payload failed: %w", err)
+		return fmt.Errorf("reading unverified payload failed: %w", err)
 	}
 	topoIA := topoIA{}
 	err = json.Unmarshal(unverifiedTopo, &topoIA)
 	if err != nil {
-		return fmt.Errorf("Parsing unverified payload failed: %w", err)
+		return fmt.Errorf("parsing unverified payload failed: %w", err)
 	}
 	ids := strings.Split(topoIA.IA, "-")
 	trcID, err := strconv.ParseInt(ids[0], 10, 64)
@@ -272,13 +271,13 @@ func verifySignature(outputPath, workingDir string) error {
 	unverifiedIA := topoIA.IA
 	// Check against TRC with highest base and serial number,
 	// as well the second highest serial number (while in the grace period)
-	sortedTRCs := sortTRCsFiles(trcs)
-	for i := len(sortedTRCs) - 1; i > 0 && i > len(sortedTRCs)-1-2; i-- {
+	sortedTRCsPaths := sortTRCsFiles(trcs).Paths()
+	for i := len(sortedTRCsPaths) - 1; i > 0 && i > len(sortedTRCsPaths)-1-2; i-- {
 		// Try to verify signature against the two latest TRCs matching the ISD claimed by the topology.
 		// TRC validity (expiration and grace period) is checked by the call to `scion-pki`.
 		// The signer AS needs to match the unverifiedIA claimed by the topology.
 		err = verifyTopologySignature(outputPath, unverifiedIA,
-			signedTopologyPath, verifiedTopologyPath, sortedTRCs[i:])
+			signedTopologyPath, verifiedTopologyPath, sortedTRCsPaths[i:])
 		if err == nil {
 			break
 		}
@@ -300,7 +299,7 @@ func cleanupVerifyDirs(workingDir string) error {
 	}
 	sort.Strings(deleteCandidates)
 	for i, d := range deleteCandidates {
-		if i >= len(deleteCandidates) - 10 {
+		if i >= len(deleteCandidates)-10 {
 			break
 		}
 		err = os.Remove(path.Join(workingDir, d))
@@ -340,6 +339,14 @@ func (s sortedTRCFileSummaries) Less(i, j int) bool {
 		return false
 	}
 	return s[i].trc.ID.Serial < s[j].trc.ID.Serial
+}
+
+func (s sortedTRCFileSummaries) Paths() []string {
+	var trcPaths []string
+	for _, trcSummary := range s {
+		trcPaths = append(trcPaths, trcSummary.path)
+	}
+	return trcPaths
 }
 
 // asn1ID is used to encode and decode the TRC ID.

@@ -37,14 +37,14 @@ import (
 )
 
 const (
-	baseURL                   = ""
-	topologyEndpoint          = "topology"
-	signedTopologyEndpoint    = "topology.signed"
-	trcsEndpoint              = "trcs"
-	trcBlobEndpoint           = "trcs/isd%d-b%d-s%d/blob"
-	topologyJSONFileName      = "topology.json"
-	signedTopologyFileName    = "topology.signed"
-	httpRequestTimeout        = 2 * time.Second
+	baseURL                = ""
+	topologyEndpoint       = "topology"
+	signedTopologyEndpoint = "topology.signed"
+	trcsEndpoint           = "trcs"
+	trcBlobEndpoint        = "trcs/isd%d-b%d-s%d/blob"
+	topologyJSONFileName   = "topology.json"
+	signedTopologyFileName = "topology.signed"
+	httpRequestTimeout     = 2 * time.Second
 )
 
 func FetchConfiguration(outputPath string, workingDir string, securityMode config.SecurityMode, addr *net.TCPAddr) error {
@@ -180,7 +180,7 @@ func wipeInsecureSymlinks(outputPath string) error {
 			return err
 		}
 		// ignore non-symlinks
-		if fInfo.Mode() & os.ModeSymlink != 1 {
+		if fInfo.Mode()&os.ModeSymlink != 1 {
 			continue
 		}
 		// stat the symlink, check if it links to a TRC from the insecure mode
@@ -237,7 +237,7 @@ func PullTRC(outputPath, workingDir string, addr *net.TCPAddr, securityMode conf
 	}
 	if securityMode == config.Insecure {
 		// symlink the TRC fetched in insecure mode into the standard directory
-		err = os.Symlink(trcPath,  tmpTRCpath)
+		err = os.Symlink(trcPath, tmpTRCpath)
 		if err != nil {
 			return fmt.Errorf("symlinking insecure TRC failed: %w", err)
 		}
