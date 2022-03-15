@@ -69,57 +69,44 @@ func verifyTopologySignature(bootstrapperPath, unverifiedIA,
 	rootCertsBundleName := trcFileName + ".certs.pem"
 	rootCertsBundlePath := path.Join(bootstrapperPath, rootCertsBundleName)
 	// extract TRC certificates:
-	err := exec.CommandContext(ctx, "scion-pki", "trc", "extract", "certificates",
-		trustAnchorTRC, "-o", rootCertsBundlePath).Run()
+	err := spkiTRCExtractCerts(ctx, trustAnchorTRC, rootCertsBundlePath)
 	if err != nil {
 		return fmt.Errorf("signature verification failed: unable to extract root certificates from TRC %s: %w",
 			trustAnchorTRC, err)
 	}
 
 	// verify signature:
-	err = exec.CommandContext(ctx, "openssl", "cms", "-verify",
-		"-in", signedTopology, "-CAfile", rootCertsBundlePath, "-purpose", "any").Run()
+	err = opensslCMSVerify(ctx, signedTopology, rootCertsBundlePath)
 	if err != nil {
 		return fmt.Errorf("signature verification failed: signature verification failed: %w", err)
 	}
 
 	detachedSignaturePath := path.Join(bootstrapperPath, "detached_signature.p7s")
 	// detach signature for further validation:
-	err = exec.CommandContext(ctx, "openssl", "smime", "-pk7out",
-		"-in", signedTopology, "-out", detachedSignaturePath).Run()
+	err = opensslSMIMEPk7out(ctx, signedTopology, detachedSignaturePath)
 	if err != nil {
 		return fmt.Errorf("certificate validation failed: unable to detach signature: %w", err)
 	}
 
 	asCertHumanChain := path.Join(bootstrapperPath, "as_cert_chain.human.pem")
 	// collect included certificates from detached signature:
-	err = exec.CommandContext(ctx, "openssl", "pkcs7", "-in", detachedSignaturePath,
-		"-inform", "PEM", "-print_certs", "-out", asCertHumanChain).Run()
+	err = opensslPKCS7Certs(ctx, detachedSignaturePath, asCertHumanChain)
 	if err != nil {
 		return fmt.Errorf("certificate validation failed: "+
 			"unable to gather included certificates from signature: %w", err)
 	}
 
 	// Split signer and ca certificate
-	rawASCertHumanChain, _ := os.ReadFile(asCertHumanChain)
-	re := regexp.MustCompile("-*?BEGIN CERTIFICATE-*?\\n[\\s\\S]*-*?END CERTIFICATE-*?\\n")
-	matches := re.FindAllString(string(rawASCertHumanChain), -1)
-
-	asCertRaw := []byte(matches[0])
-	rawASCertPem, _ := pem.Decode(asCertRaw)
-	if rawASCertPem != nil {
-		asCertRaw = rawASCertPem.Bytes
-	}
-	cert, err := x509.ParseCertificate(asCertRaw)
+	certs, rawCerts, err := getCertsFromBundle(asCertHumanChain)
 	if err != nil {
-		return fmt.Errorf("certificate validation failed: "+
-			"unable to parse signer certificates from signature: %w", err)
+		return fmt.Errorf("certificate validation failed: %w", err)
 	}
+	asCert := certs[0]
 
 	// Check signer AS ID matches unverifiedIA
 	certSubjectASID := ""
 	OIDNameIA := asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 55324, 1, 2, 1}
-	for _, dn := range cert.Subject.Names {
+	for _, dn := range asCert.Subject.Names {
 		if dn.Type.Equal(OIDNameIA) {
 			certSubjectASID = dn.Value.(string)
 			break
@@ -133,23 +120,52 @@ func verifyTopologySignature(bootstrapperPath, unverifiedIA,
 
 	// Store certificate chain extracted from signature
 	asCertChainPath := path.Join(bootstrapperPath, "as_cert_chain.pem")
-	rawASCertChain := strings.Join(matches, "\n")
+	rawASCertChain := strings.Join(rawCerts, "\n")
 	_ = os.WriteFile(asCertChainPath, []byte(rawASCertChain), 0666)
 
 	// verify AS certificate chain back to TRC(s):
-	err = exec.CommandContext(ctx, "scion-pki", "certificate", "verify",
-		"--trc", strings.Join(trcPaths, ","), asCertChainPath).Run()
+	err = spkiCertVerify(ctx, strings.Join(trcPaths, ","), asCertChainPath)
 	if err != nil {
 		return fmt.Errorf("certificate validation failed: unable to validate certificate chain: %w", err)
 	}
 
 	// We now have a signed topology with a valid signature and a certificate chain back to a TRC, write out the payload
-	err = exec.CommandContext(ctx, "openssl", "cms", "-verify", "-in", signedTopology,
-		"-CAfile", rootCertsBundlePath, "-purpose", "any", "-noout", "-text", "-out", verifiedTopology).Run()
+	err = opensslCMSVerifyOutput(ctx, signedTopology, rootCertsBundlePath, verifiedTopology)
 	if err != nil {
 		return fmt.Errorf("extracting signed payload failed: %w", err)
 	}
 	return nil
+}
+
+func getCertsFromBundle(asCertHumanChain string) ([]*x509.Certificate, []string, error) {
+	rawASCertHumanChain, _ := os.ReadFile(asCertHumanChain)
+	// Split signer and ca certificate
+	re := regexp.MustCompile("-*?BEGIN CERTIFICATE-*?\\n[\\s\\S]*-*?END CERTIFICATE-*?\\n")
+	matches := re.FindAllString(string(rawASCertHumanChain), -1)
+	if len(matches) != 2 {
+		return nil, nil, fmt.Errorf("unable to split certificate bundle: certificates included: %d",
+			len(matches))
+	}
+
+	asCertRaw := []byte(matches[0])
+	rawASCertPem, _ := pem.Decode(asCertRaw)
+	if rawASCertPem != nil {
+		asCertRaw = rawASCertPem.Bytes
+	}
+	cert, err := x509.ParseCertificate(asCertRaw)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to parse signer certificates from signature: %w", err)
+	}
+	caCertRaw := []byte(matches[1])
+	rawCACertPem, _ := pem.Decode(caCertRaw)
+	if rawCACertPem != nil {
+		caCertRaw = rawCACertPem.Bytes
+	}
+	caCert, err := x509.ParseCertificate(caCertRaw)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to parse signer certificates from signature: %w", err)
+	}
+	return []*x509.Certificate{cert, caCert}, matches, err
 }
 
 func verifyTRCUpdateChain(outputPath, candidateTRCPath string, strict bool) error {
@@ -173,10 +189,7 @@ func verifyTRCUpdateChain(outputPath, candidateTRCPath string, strict bool) erro
 		return nil
 	}
 	trcUpdateChainPaths := sortTRCsFiles(trcs).Paths()
-	cmdArgs := []string{"trc", "-verify", "--anchor"}
-	cmdArgs = append(cmdArgs, trcUpdateChainPaths...)
-	cmdArgs = append(cmdArgs, candidateTRCPath)
-	err = exec.CommandContext(ctx, "scion-pki", cmdArgs...).Run()
+	err = spkiTRCVerify(ctx, trcUpdateChainPaths, candidateTRCPath)
 	if err != nil {
 		return fmt.Errorf("validating TRC update chain failed: %w", err)
 	}
@@ -235,11 +248,10 @@ func verifySignature(outputPath, workingDir string) error {
 	}
 
 	// extract unverified payload
+	unverifiedTopologyPath := path.Join(bootstrapperPath, topologyJSONFileName+".unverified")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	unverifiedTopologyPath := path.Join(bootstrapperPath, topologyJSONFileName+".unverified")
-	err = exec.CommandContext(ctx, "openssl", "cms", "-verify", "-noverify",
-		"-in", signedTopologyPath, "-text", "-noout", "-out", unverifiedTopologyPath).Run()
+	err = opensslCMSNoVerifyOutput(ctx, signedTopologyPath, unverifiedTopologyPath)
 	if err != nil {
 		return fmt.Errorf("extracting unverified payload failed: %w", err)
 	}
