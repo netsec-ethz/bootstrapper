@@ -123,7 +123,7 @@ func verifyTopologySignature(bootstrapperPath, unverifiedIA,
 	rawASCertChain := strings.Join(rawCerts, "\n")
 	_ = os.WriteFile(asCertChainPath, []byte(rawASCertChain), 0666)
 
-	// verify AS certificate chain back to TRC(s):
+	// verify AS certificate chain back to TRC(s) follows the SCION CP PKI rules about cert type, key usage:
 	err = spkiCertVerify(ctx, strings.Join(trcPaths, ","), asCertChainPath)
 	if err != nil {
 		return fmt.Errorf("certificate validation failed: unable to validate certificate chain: %w", err)

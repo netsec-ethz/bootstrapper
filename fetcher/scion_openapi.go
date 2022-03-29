@@ -200,6 +200,12 @@ func wipeInsecureSymlinks(outputPath string) error {
 }
 
 func PullTRC(outputPath, workingDir string, addr *net.TCPAddr, securityMode config.SecurityMode, trcID TRCID) error {
+	trcPath := path.Join(outputPath, "certs",
+		fmt.Sprintf("ISD%d-B%d-S%d.trc", trcID.Isd, trcID.BaseNumber, trcID.SerialNumber))
+	if _, err := os.Stat(trcPath); !os.IsNotExist(err) {
+		log.Info("identical TRC version already exists, not overwritting: path: %s : %w", trcPath, err)
+		return nil
+	}
 	url := buildTRCURL(addr.IP, addr.Port, trcID)
 	raw, err := fetchRawBytes("TRC", url)
 	if err != nil {
@@ -208,12 +214,6 @@ func PullTRC(outputPath, workingDir string, addr *net.TCPAddr, securityMode conf
 	// Mark TRCs downloaded in the insecure mode as such
 	tmpTRCpath := path.Join(workingDir,
 		fmt.Sprintf("ISD%d-B%d-S%d.trc.insecure", trcID.Isd, trcID.BaseNumber, trcID.SerialNumber))
-	trcPath := path.Join(outputPath, "certs",
-		fmt.Sprintf("ISD%d-B%d-S%d.trc", trcID.Isd, trcID.BaseNumber, trcID.SerialNumber))
-	if _, err := os.Stat(trcPath); !os.IsNotExist(err) {
-		log.Info("identical TRC version already exists, not overwritting: path: %s : %w", trcPath, err)
-		return nil
-	}
 	err = os.WriteFile(tmpTRCpath, raw, 0644)
 	if err != nil {
 		return fmt.Errorf("bootstrapper could not store TRC: %w", err)
