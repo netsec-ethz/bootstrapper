@@ -65,7 +65,7 @@ func FetchConfiguration(outputPath string, workingDir string, securityMode confi
 }
 
 func PullTopology(outputPath string, addr *net.TCPAddr) error {
-	url := buildTopologyURL(addr.IP, addr.Port)
+	url := buildTopologyURL(addr)
 	raw, err := fetchRawBytes("topology", url)
 	if err != nil {
 		return err
@@ -87,13 +87,13 @@ func PullTopology(outputPath string, addr *net.TCPAddr) error {
 	return nil
 }
 
-func buildTopologyURL(ip net.IP, port int) string {
+func buildTopologyURL(addr *net.TCPAddr) string {
 	urlPath := baseURL + topologyEndpoint
-	return fmt.Sprintf("http://%s:%d/%s", ip, port, urlPath)
+	return fmt.Sprintf("http://%s/%s", addr.String(), urlPath)
 }
 
 func PullSignedTopology(workingDir string, addr *net.TCPAddr) error {
-	url := buildSignedTopologyURL(addr.IP, addr.Port)
+	url := buildSignedTopologyURL(addr)
 	raw, err := fetchRawBytes("signed topology", url)
 	if err != nil {
 		return err
@@ -106,9 +106,9 @@ func PullSignedTopology(workingDir string, addr *net.TCPAddr) error {
 	return nil
 }
 
-func buildSignedTopologyURL(ip net.IP, port int) string {
+func buildSignedTopologyURL(addr *net.TCPAddr) string {
 	urlPath := baseURL + signedTopologyEndpoint
-	return fmt.Sprintf("http://%s:%d/%s", ip, port, urlPath)
+	return fmt.Sprintf("http://%s/%s", addr.String(), urlPath)
 }
 
 // API definition
@@ -127,7 +127,7 @@ type TRCID struct {
 }
 
 func PullTRCs(outputPath, workingDir string, addr *net.TCPAddr, securityMode config.SecurityMode) error {
-	url := buildTRCsURL(addr.IP, addr.Port)
+	url := buildTRCsURL(addr)
 	raw, err := fetchRawBytes("TRCs index", url)
 	if err != nil {
 		return err
@@ -158,9 +158,9 @@ func PullTRCs(outputPath, workingDir string, addr *net.TCPAddr, securityMode con
 	return nil
 }
 
-func buildTRCsURL(ip net.IP, port int) string {
+func buildTRCsURL(addr *net.TCPAddr) string {
 	urlPath := baseURL + trcsEndpoint
-	return fmt.Sprintf("http://%s:%d/%s", ip, port, urlPath)
+	return fmt.Sprintf("http://%s/%s", addr.String(), urlPath)
 }
 
 func wipeInsecureSymlinks(outputPath string) error {
@@ -184,13 +184,14 @@ func wipeInsecureSymlinks(outputPath string) error {
 			continue
 		}
 		// stat the symlink, check if it links to a TRC from the insecure mode
-		fInfo, err = os.Stat(trc.Name())
+		symlinkPath := path.Join(outputPath, "certs", trc.Name())
+		fInfo, err = os.Stat(symlinkPath)
 		if err != nil {
 			return err
 		}
 		if strings.HasSuffix(fInfo.Name(), ".insecure") {
 			// unlink
-			err = os.Remove(fInfo.Name())
+			err = os.Remove(symlinkPath)
 			if err != nil {
 				return err
 			}
@@ -206,7 +207,7 @@ func PullTRC(outputPath, workingDir string, addr *net.TCPAddr, securityMode conf
 		log.Info("identical TRC version already exists, not overwritting: path: %s : %w", trcPath, err)
 		return nil
 	}
-	url := buildTRCURL(addr.IP, addr.Port, trcID)
+	url := buildTRCURL(addr, trcID)
 	raw, err := fetchRawBytes("TRC", url)
 	if err != nil {
 		return err
@@ -218,12 +219,13 @@ func PullTRC(outputPath, workingDir string, addr *net.TCPAddr, securityMode conf
 	if err != nil {
 		return fmt.Errorf("bootstrapper could not store TRC: %w", err)
 	}
-	// Do additional checks for security_mode permissive and strict to check the TRC update chain
+	// Do additional checks for security_mode strict and permissive to check the TRC update chain
 	switch securityMode {
-	case config.Permissive:
-		err = verifyTRCUpdateChain(outputPath, tmpTRCpath, false)
 	case config.Strict:
 		err = verifyTRCUpdateChain(outputPath, tmpTRCpath, true)
+	case config.Permissive:
+		err = verifyTRCUpdateChain(outputPath, tmpTRCpath, false)
+	case  config.Insecure:
 	default:
 		return fmt.Errorf("invalid security mode: %v", securityMode)
 	}
@@ -251,9 +253,9 @@ func PullTRC(outputPath, workingDir string, addr *net.TCPAddr, securityMode conf
 	return err
 }
 
-func buildTRCURL(ip net.IP, port int, trc TRCID) string {
+func buildTRCURL(addr *net.TCPAddr, trc TRCID) string {
 	urlPath := baseURL + trcBlobEndpoint
-	uri := fmt.Sprintf("http://%s:%d/", ip, port) + urlPath
+	uri := fmt.Sprintf("http://%s/", addr.String()) + urlPath
 	return fmt.Sprintf(uri, trc.Isd, trc.BaseNumber, trc.SerialNumber)
 }
 
@@ -301,7 +303,6 @@ func (t sortedTRCBriefs) Len() int {
 
 func (t sortedTRCBriefs) Swap(i, j int) {
 	t[i], t[j] = t[j], t[i]
-	return
 }
 
 func (t sortedTRCBriefs) Less(i, j int) bool {

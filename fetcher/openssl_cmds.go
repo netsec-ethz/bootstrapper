@@ -5,20 +5,6 @@ import (
 	"os/exec"
 )
 
-// opensslCMSVerify uses the openssl cms module to verify the signature of signedTopology
-// using the CA bundle rootCertsBundlePath.
-func opensslCMSVerify(ctx context.Context, signedTopology, rootCertsBundlePath string) error {
-	return exec.CommandContext(ctx, "openssl", "cms", "-verify",
-		"-in", signedTopology, "-CAfile", rootCertsBundlePath, "-purpose", "any").Run()
-}
-
-// opensslCMSVerifyOutput uses the openssl cms module to outputs the unverified signedTopologyPath payload
-// without any signature verification to unverifiedTopologyPath.
-func opensslCMSNoVerifyOutput(ctx context.Context, signedTopologyPath, unverifiedTopologyPath string) error {
-	return exec.CommandContext(ctx, "openssl", "cms", "-verify", "-noverify",
-		"-in", signedTopologyPath, "-text", "-noout", "-out", unverifiedTopologyPath).Run()
-}
-
 // opensslCMSVerifyOutput uses the openssl cms module to verify the signature of signedTopology
 // using the CA bundle rootCertsBundlePath, and outputs the verified payload to verifiedTopology.
 func opensslCMSVerifyOutput(ctx context.Context, signedTopology, rootCertsBundlePath, verifiedTopology string) error {

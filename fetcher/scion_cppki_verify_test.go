@@ -181,17 +181,16 @@ var payload = `{
 }`
 
 func TestVerify(t *testing.T) {
-	tmpDir := path.Join(os.TempDir(), "bootstrapper-cppki-tests")
-	err := os.MkdirAll(tmpDir, 0775)
+	tmpDir, err := os.MkdirTemp("", "bootstrapper-cppki-tests_*")
 	if err != nil {
 		log.Error("Failed to create test directory for testrun", "dir", tmpDir, "err", err)
 	}
 
 	// Generate signed payload
-	outputPath := path.Join(tmpDir, "sign")
-	err = os.Mkdir(outputPath, 0775)
+	signPath := path.Join(tmpDir, "sign")
+	err = os.MkdirAll(signPath, 0775)
 	if err != nil {
-		log.Error("Failed to create verify test directory for testrun", "dir", tmpDir, "err", err)
+		log.Error("Failed to create sign test directory for testrun", "dir", signPath, "err", err)
 	}
 	// Dump files payload, isd17ASffaa_0_1101CAcrt, isd17ASffaa_1_1aspem, isd17ASffaa_1_1cpASkey to directory sign
 	files := map[string]string{
@@ -200,37 +199,38 @@ func TestVerify(t *testing.T) {
 		"ISD17-ASffaa_1_1.as.pem":    isd17ASffaa_1_1aspem,
 		"ISD17-ASffaa_1_1.cp.as.key": isd17ASffaa_1_1cpASkey}
 	for fileName, fileContent := range files {
-		filePath := path.Join(outputPath, fileName)
+		filePath := path.Join(signPath, fileName)
 		err = os.WriteFile(filePath, []byte(fileContent), 0666)
 		if err != nil {
-			log.Error("Failed writing files required for signing", "outputPath", outputPath, "err", err)
+			log.Error("Failed writing files required for signing", "signPath", signPath, "err", err)
 		}
 	}
-	payloadPath := path.Join(outputPath, "payload")
-	signedPayloadPath := path.Join(outputPath, "payload.signed")
-	asKeyPath := path.Join(outputPath, "ISD17-ASffaa_1_1.cp.as.key")
-	asCertPath := path.Join(outputPath, "ISD17-ASffaa_1_1.as.pem")
-	caCertPath := path.Join(outputPath, "ISD17-ASffaa_0_1101.ca.crt")
+	payloadPath := path.Join(signPath, "payload")
+	signedPayloadPath := path.Join(signPath, "payload.signed")
+	asKeyPath := path.Join(signPath, "ISD17-ASffaa_1_1.cp.as.key")
+	asCertPath := path.Join(signPath, "ISD17-ASffaa_1_1.as.pem")
+	caCertPath := path.Join(signPath, "ISD17-ASffaa_0_1101.ca.crt")
 	err = exec.Command("openssl", "cms", "-sign", "-text",
 		"-in", payloadPath, "-out", signedPayloadPath, "-inkey", asKeyPath,
 		"-signer", asCertPath, "-certfile", caCertPath).Run()
 	if err != nil {
-		log.Error("Failed create signed file", "outputPath", outputPath, "err", err)
+		log.Error("Failed create signed file", "signedPayloadPath", signedPayloadPath, "err", err)
 	}
 
 	// Verify signed payload
-	outputPath = path.Join(tmpDir, "verify")
-	err = os.Mkdir(outputPath, 0775)
+	bootstrapperPath := path.Join(tmpDir, "bootstrapper")
+	err = os.MkdirAll(bootstrapperPath, 0775)
 	if err != nil {
-		log.Error("Failed to create verify test directory for testrun", "dir", tmpDir, "err", err)
+		log.Error("Failed to create bootstrapper test directory for testrun",
+			"dir", bootstrapperPath, "err", err)
 	}
-	// copy payload.signed and dump isd17sB1S1trc to directory verify
+	// copy payload.signed and dump isd17sB1S1trc to output directory
 	signedPayload, err := os.Open(signedPayloadPath)
 	if err != nil {
 		log.Error("Failed copying signed payload", "err", err)
 	}
 	defer signedPayload.Close()
-	payloadPath = path.Join(outputPath, "payload.signed")
+	payloadPath = path.Join(bootstrapperPath, "topology.signed")
 	payloadFile, err := os.Create(payloadPath)
 	if err != nil {
 		log.Error("Failed copying signed payload", "err", err)
@@ -244,17 +244,19 @@ func TestVerify(t *testing.T) {
 	if err != nil {
 		log.Error("Failed copying signed payload", "err", err)
 	}
-	trcPath := path.Join(outputPath, "ISD17-B1-S1.trc")
+	trcsPath := path.Join(tmpDir, "certs")
+	err = os.MkdirAll(trcsPath, 0775)
+	if err != nil {
+		log.Error("Failed to create certs test directory for testrun", "dir", tmpDir, "err", err)
+	}
+	trcPath := path.Join(trcsPath, "ISD17-B1-S1.trc")
 	err = os.WriteFile(trcPath, []byte(isd17B1S1trc), 0666)
 	if err != nil {
 		log.Error("Failed writing TRC file", "err", err)
 	}
 
-	verifiedTopologyPath := path.Join(outputPath, topologyJSONFileName)
-	// run the actual test, verifying the signature
-	// using the signed payload and the TRC, and the IA extracted from the topology
-	if err := verifyTopologySignature(outputPath, "17-ffaa:1:1", payloadPath, verifiedTopologyPath, []string{trcPath});
-		err != nil {
+	// run the actual test, verifying the signature using the signed topology
+	if err := verifyTopologySignature(tmpDir, bootstrapperPath); err != nil {
 		log.Error("Signature verification failed: verifyTopologySignature", "err", err)
 		t.FailNow()
 	}

@@ -50,7 +50,6 @@ var (
 	helpConfig    bool
 	configPath    string
 	IfaceName     string
-	WorkingDir    string
 )
 
 type Config struct {
@@ -62,6 +61,10 @@ type Config struct {
 	DNSSD           hinting.DNSHintGeneratorConf  `toml:"dnssd"`
 	MDNS            hinting.MDNSHintGeneratorConf `toml:"mdns"`
 	Logging         LogConfig                     `toml:"log,omitempty"`
+}
+
+func (c Config) WorkingDir() string {
+	return path.Join(c.SciondConfigDir, "bootstrapper")
 }
 
 // LogConfig is the configuration for the logger.
@@ -129,7 +132,6 @@ func (cfg *Config) InitDefaults() {
 	if cfg.SecurityMode == "" {
 		cfg.SecurityMode = Permissive
 	}
-	WorkingDir = path.Join(cfg.SciondConfigDir, "bootstrapper")
 }
 
 func (cfg *Config) Validate() error {
