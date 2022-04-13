@@ -3,6 +3,7 @@ package fetcher
 import (
 	"context"
 	"os/exec"
+	"strings"
 )
 
 // scion-pki commands
@@ -13,16 +14,17 @@ func spkiTRCExtractCerts(ctx context.Context, trustAnchorTRC, rootCertsBundlePat
 		trustAnchorTRC, "-o", rootCertsBundlePath).Run()
 }
 
-// spkiCertVerify verifies the AS certificate asCertChainPath against the sorted TRC update chain trcs.
-func spkiCertVerify(ctx context.Context, trcs, asCertChainPath string) error {
+// spkiCertVerify verifies the AS certificate asCertChainPath
+// against the sorted TRCs in the update chain trcsUpdateChain.
+func spkiCertVerify(ctx context.Context, trcsUpdateChain []string, asCertChainPath string) error {
 	return exec.CommandContext(ctx, "scion-pki", "certificate", "verify",
-		"--trc", trcs, asCertChainPath).Run()
+		"--trc", strings.Join(trcsUpdateChain, ","), asCertChainPath).Run()
 }
 
 // spkiTRCVerify verifies the TRC update chain for candidateTRCPath anchored in the TRCs trcUpdateChainPaths
-func spkiTRCVerify(ctx context.Context, trcUpdateChainPaths []string, candidateTRCPath string) error {
-	cmdArgs := []string{"trc", "-verify", "--anchor"}
-	cmdArgs = append(cmdArgs, trcUpdateChainPaths...)
-	cmdArgs = append(cmdArgs, candidateTRCPath)
-	return exec.CommandContext(ctx, "scion-pki",  cmdArgs...).Run()
+func spkiTRCVerify(ctx context.Context, trcAnchorPath string, updateChainCandidatePaths []string) error {
+	cmdArgs := []string{"trc", "verify", "--anchor"}
+	cmdArgs = append(cmdArgs, trcAnchorPath)
+	cmdArgs = append(cmdArgs, updateChainCandidatePaths...)
+	return exec.CommandContext(ctx, "scion-pki", cmdArgs...).Run()
 }

@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -53,32 +53,29 @@ func verifyTopologySignature(outputPath, workingDir string) error {
 	defer cancel()
 
 	for _, tool := range []string{"openssl", "scion-pki"} {
-		_, err := exec.LookPath(tool)
-		if err != nil {
+		if _, err := exec.LookPath(tool); err != nil {
 			return err
 		}
 	}
 
 	// Create verify directory
 	timestamp := time.Now().Unix()
-	verifyPath := path.Join(workingDir, fmt.Sprintf("verify-%d", timestamp))
+	verifyPath := filepath.Join(workingDir, fmt.Sprintf("verify-%d", timestamp))
 	err := os.Mkdir(verifyPath, 0775)
 	if err != nil {
 		return fmt.Errorf("failed to create verify directory: dir: %s, err: %w", verifyPath, err)
 	}
 
-	signedTopology := path.Join(workingDir, signedTopologyFileName)
-	detachedSignaturePath := path.Join(verifyPath, "detached_signature.p7s")
+	signedTopology := filepath.Join(workingDir, signedTopologyFileName)
+	detachedSignaturePath := filepath.Join(verifyPath, "detached_signature.p7s")
 	// detach signature for further validation:
-	err = opensslSMIMEPk7out(ctx, signedTopology, detachedSignaturePath)
-	if err != nil {
+	if err = opensslSMIMEPk7out(ctx, signedTopology, detachedSignaturePath); err != nil {
 		return fmt.Errorf("unable to detach signature: %w", err)
 	}
 
-	asCertHumanChain := path.Join(verifyPath, "as_cert_chain.human.pem")
+	asCertHumanChain := filepath.Join(verifyPath, "as_cert_chain.human.pem")
 	// collect included certificates from detached signature:
-	err = opensslPKCS7Certs(ctx, detachedSignaturePath, asCertHumanChain)
-	if err != nil {
+	if err = opensslPKCS7Certs(ctx, detachedSignaturePath, asCertHumanChain); err != nil {
 		return fmt.Errorf("unable to gather included certificates from signature: %w", err)
 	}
 
@@ -90,7 +87,7 @@ func verifyTopologySignature(outputPath, workingDir string) error {
 	asCert := certs[0]
 
 	// Store certificate chain extracted from signature
-	asCertChainPath := path.Join(verifyPath, "as_cert_chain.pem")
+	asCertChainPath := filepath.Join(verifyPath, "as_cert_chain.pem")
 	rawASCertChain := strings.Join(rawCerts, "\n")
 	_ = os.WriteFile(asCertChainPath, []byte(rawASCertChain), 0666)
 
@@ -106,56 +103,56 @@ func verifyTopologySignature(outputPath, workingDir string) error {
 	}
 	if len(trcs) == 0 {
 		return fmt.Errorf("unable to verify signature, no valid TRC found in %s,  ISD id: %d",
-			verifyPath, signerTRCid)
+			outputPath, signerTRCid)
 	}
 	sortedTRCsPaths := sortTRCsFiles(trcs).Paths()
 
-	for i := len(sortedTRCsPaths) - 1; i > 0 && i > len(sortedTRCsPaths)-1-2; i-- {
-		// Try to verify signature against the two latest TRCs matching the ISD claimed by the signer.
-		// TRC validity (expiration and grace period) is checked by the call to `scion-pki`.
-		// The signer IA needs to match the IA in the topology of the payload.
-		trustAnchorTRC := sortedTRCsPaths[i]
-		_, trcFileName := path.Split(trustAnchorTRC)
-		rootCertsBundleName := trcFileName + ".certs.pem"
-		rootCertsBundlePath := path.Join(verifyPath, rootCertsBundleName)
-		// extract TRC certificates:
-		err = spkiTRCExtractCerts(ctx, trustAnchorTRC, rootCertsBundlePath)
-		if err != nil {
-			err = fmt.Errorf("unable to extract root certificates from TRC %s: %w",
-				trustAnchorTRC, err)
-			continue
-		}
-		// verify the AS certificate chain (but not the payload signature) back to TRC(s) follows the SCION CP PKI rules
-		// about cert type, key usage:
-		err = spkiCertVerify(ctx, strings.Join(sortedTRCsPaths[i:], ","), asCertChainPath)
-		if err != nil {
-			err = fmt.Errorf("unable to validate certificate chain: %w", err)
-			continue
-		}
-
-		unvalidatedTopologyPath := path.Join(verifyPath, topologyJSONFileName+".unvalidated")
-		// verify the signature and certificate chain back to a root certs bundle, write out the payload:
-		err = opensslCMSVerifyOutput(ctx, signedTopology, rootCertsBundlePath, unvalidatedTopologyPath)
-		if err != nil {
-			err = fmt.Errorf("verifying and extracting signed payload failed: %w", err)
-			continue
-		}
-
-		// Validate signer IA matches payload IA
-		err = checkTopoIA(unvalidatedTopologyPath, signerIA)
-		if err != nil {
-			rerr := os.Remove(unvalidatedTopologyPath)
-			log.Error("removing mismatching topology failed", "err", rerr)
-			continue
-		}
-		verifiedTopology := path.Join(outputPath, topologyJSONFileName)
-		err = os.Rename(unvalidatedTopologyPath, verifiedTopology)
-		if err != nil {
-			continue
-		}
-		break
+	// verify the AS certificate chain (but not the payload signature) back to the TRCs of the ISD follows the
+	// SCION CP PKI rules about cert type, key usage:
+	if err = spkiCertVerify(ctx, sortedTRCsPaths, asCertChainPath); err != nil {
+		return fmt.Errorf("unable to validate certificate chain: %w", err)
 	}
+
+	var unvalidatedTopologyPath string
+	for i := len(sortedTRCsPaths) - 1; i >= 0 && i > len(sortedTRCsPaths)-1-2; i-- {
+		// Try to verify the signature against the root certificates included in the two latest TRCs
+		// matching the ISD claimed by the signer.
+		// The root certificates included in the two latest TRCs might be different.
+		// TRC validity (expiration and grace period) has already been checked in spkiCertVerify through `scion-pki`.
+		trustAnchorTRC := sortedTRCsPaths[i]
+		unvalidatedTopologyPath = filepath.Join(verifyPath, fmt.Sprintf(topologyJSONFileName+".unvalidated%d", i))
+		err = verifyWithRootBundle(ctx, signedTopology, unvalidatedTopologyPath, trustAnchorTRC, verifyPath)
+		if err == nil {
+			break
+		}
+	}
+	if err != nil {
+		return err
+	}
+	// Validate signer IA matches payload IA
+	if err = checkTopoIA(unvalidatedTopologyPath, signerIA); err != nil {
+		return err
+	}
+	verifiedTopology := filepath.Join(outputPath, topologyJSONFileName)
+	err = os.Rename(unvalidatedTopologyPath, verifiedTopology)
 	return err
+}
+
+func verifyWithRootBundle(ctx context.Context,
+	signedTopology, unvalidatedTopologyPath, trustAnchorTRC, verifyPath string) (err error) {
+
+	_, trcFileName := filepath.Split(trustAnchorTRC)
+	rootCertsBundlePath := filepath.Join(verifyPath, trcFileName+".certs.pem")
+	// extract TRC certificates:
+	if err = spkiTRCExtractCerts(ctx, trustAnchorTRC, rootCertsBundlePath); err != nil {
+		return fmt.Errorf("unable to extract root certificates from TRC %s: %w",
+			trustAnchorTRC, err)
+	}
+	// verify the signature and certificate chain back to a root certs bundle, write out the payload:
+	if err = opensslCMSVerifyOutput(ctx, signedTopology, rootCertsBundlePath, unvalidatedTopologyPath); err != nil {
+		return fmt.Errorf("verifying and extracting signed payload failed: %w", err)
+	}
+	return
 }
 
 // getCertsFromBundle splits a certificate bundle consisting of an AS certificate and a CA certificate
@@ -195,13 +192,11 @@ func getCertsFromBundle(asCertHumanChain string) ([]*x509.Certificate, []string,
 func verifyTRCUpdateChain(outputPath, candidateTRCPath string, strict bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-	v, _ := os.ReadFile(candidateTRCPath)
-	trc, err := getTRCSummary(v)
+	trc, err := readTRCSummary(candidateTRCPath)
 	if err != nil {
 		return fmt.Errorf("validating TRC update chain failed: %w", err)
 	}
-	candidateTRCid := trc.ID.ISD
-	trcs, err := getTRCsByISDid(outputPath, candidateTRCid)
+	trcs, err := getTRCsByISDid(outputPath, trc.ID.ISD)
 	if err != nil {
 		return err
 	}
@@ -212,7 +207,8 @@ func verifyTRCUpdateChain(outputPath, candidateTRCPath string, strict bool) erro
 		return nil
 	}
 	trcUpdateChainPaths := sortTRCsFiles(trcs).Paths()
-	err = spkiTRCVerify(ctx, trcUpdateChainPaths, candidateTRCPath)
+	trcUpdateChainPaths = append(trcUpdateChainPaths, candidateTRCPath)
+	err = spkiTRCVerify(ctx, trcUpdateChainPaths[0], trcUpdateChainPaths[1:])
 	if err != nil {
 		return fmt.Errorf("validating TRC update chain failed: %w", err)
 	}
@@ -260,35 +256,26 @@ func getCertIA(cert *x509.Certificate) (IA string, TRCid int64, err error) {
 
 // getTRCsByISDid returns all the TRCs for a specific ISD ID.
 func getTRCsByISDid(outputPath string, isdID int64) ([]trcFileSummary, error) {
-	trcs, err := os.ReadDir(path.Join(outputPath, "certs"))
+	trcs, err := filepath.Glob(filepath.Join(outputPath, "certs") + string(os.PathSeparator) + "*.trc")
 	if err != nil {
 		return nil, err
 	}
 	var isdTRCs []trcFileSummary
-	for _, trcName := range trcs {
-		if !strings.HasSuffix(trcName.Name(), ".trc") {
-			continue
-		}
-		filePath := path.Join(outputPath, "certs", trcName.Name())
-		v, err := os.ReadFile(filePath)
+	for _, trcPath := range trcs {
+		trc, err := readTRCSummary(trcPath)
 		if err != nil {
-			log.Error("reading TRC file failed", "path", filePath, "err", err)
-			continue
-		}
-		trc, err := getTRCSummary(v)
-		if err != nil {
-			log.Error("parsing TRC file failed", "path", filePath, "err", err)
+			log.Error("reading TRC file failed", "path", trcPath, "err", err)
 			continue
 		}
 		if trc.ID.ISD == isdID {
-			isdTRCs = append(isdTRCs, trcFileSummary{trc: *trc, path: filePath})
+			isdTRCs = append(isdTRCs, trcFileSummary{trc: trc, path: trcPath})
 		}
 	}
 	return isdTRCs, err
 }
 
 // sortTRCsFiles sorts the TRC summaries according to their update chain order.
-func sortTRCsFiles(trcFileSummaries []trcFileSummary) (trcUpdateChain sortedTRCFileSummaries) {
+func sortTRCsFiles(trcFileSummaries []trcFileSummary) sortedTRCFileSummaries {
 	// sort from lowest TRC ISD ID, base number and serial number to highest, in that order
 	sort.Sort(sortedTRCFileSummaries(trcFileSummaries))
 	return trcFileSummaries
@@ -325,7 +312,7 @@ func cleanupVerifyDirs(workingDir string) error {
 		if i >= len(deleteCandidates)-10 {
 			break
 		}
-		err = os.Remove(path.Join(workingDir, d))
+		err = os.Remove(filepath.Join(workingDir, d))
 		if err != nil {
 			log.Info("Unable to remove old verify directory", "err", err)
 		}
@@ -333,38 +320,42 @@ func cleanupVerifyDirs(workingDir string) error {
 	return nil
 }
 
-// getTRCSummary returns the trcSummary with ISD, serial and base number information for a pem encoded or TRC blob.
-func getTRCSummary(rawTRC []byte) (*trcSummary, error) {
+// readTRCSummary returns the trcSummary with ISD, serial and base number information for a pem encoded or TRC blob.
+func readTRCSummary(filePath string) (trcSummary, error) {
+	rawTRC, err := os.ReadFile(filePath)
+	if err != nil {
+		return trcSummary{}, fmt.Errorf("reading TRC file failed: %w", err)
+	}
 	trcPem, _ := pem.Decode(rawTRC)
 	if trcPem != nil && trcPem.Type == "TRC" {
 		rawTRC = trcPem.Bytes
 	}
 	var rawTRCSigned trcContainer
-	_, err := asn1.Unmarshal(rawTRC, &rawTRCSigned)
+	_, err = asn1.Unmarshal(rawTRC, &rawTRCSigned)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse trc container: %w", err)
+		return trcSummary{}, fmt.Errorf("failed to parse trc container: %w", err)
 	}
 
 	if !rawTRCSigned.ContentType.Equal(asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 7, 2}) {
-		return nil, fmt.Errorf("wrong trc signed data content type")
+		return trcSummary{}, fmt.Errorf("wrong trc signed data content type")
 	}
 	var trcSignedData trcSignedData
 	_, err = asn1.Unmarshal(rawTRCSigned.Content.Bytes, &trcSignedData)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse trc signed data: %w", err)
+		return trcSummary{}, fmt.Errorf("failed to parse trc signed data: %w", err)
 	}
 	var trcContent asn1.RawValue
 	_, err = asn1.Unmarshal(trcSignedData.EncapContentInfo.EContent.Bytes, &trcContent)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse trc encap content data: %w", err)
+		return trcSummary{}, fmt.Errorf("failed to parse trc encap content data: %w", err)
 	}
 
 	var trcSummary trcSummary
 	_, err = asn1.Unmarshal(trcContent.Bytes, &trcSummary)
 	if err != nil {
-		return nil, fmt.Errorf("parsing TRC ID failed: %w", err)
+		return trcSummary, fmt.Errorf("parsing TRC ID failed: %w", err)
 	}
-	return &trcSummary, nil
+	return trcSummary, nil
 }
 
 type trcFileSummary struct {

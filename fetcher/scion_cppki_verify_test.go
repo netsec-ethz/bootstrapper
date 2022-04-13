@@ -19,7 +19,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path"
+	"path/filepath"
 	"testing"
 )
 
@@ -187,7 +187,7 @@ func TestVerify(t *testing.T) {
 	}
 
 	// Generate signed payload
-	signPath := path.Join(tmpDir, "sign")
+	signPath := filepath.Join(tmpDir, "sign")
 	err = os.MkdirAll(signPath, 0775)
 	if err != nil {
 		log.Error("Failed to create sign test directory for testrun", "dir", signPath, "err", err)
@@ -199,17 +199,17 @@ func TestVerify(t *testing.T) {
 		"ISD17-ASffaa_1_1.as.pem":    isd17ASffaa_1_1aspem,
 		"ISD17-ASffaa_1_1.cp.as.key": isd17ASffaa_1_1cpASkey}
 	for fileName, fileContent := range files {
-		filePath := path.Join(signPath, fileName)
+		filePath := filepath.Join(signPath, fileName)
 		err = os.WriteFile(filePath, []byte(fileContent), 0666)
 		if err != nil {
 			log.Error("Failed writing files required for signing", "signPath", signPath, "err", err)
 		}
 	}
-	payloadPath := path.Join(signPath, "payload")
-	signedPayloadPath := path.Join(signPath, "payload.signed")
-	asKeyPath := path.Join(signPath, "ISD17-ASffaa_1_1.cp.as.key")
-	asCertPath := path.Join(signPath, "ISD17-ASffaa_1_1.as.pem")
-	caCertPath := path.Join(signPath, "ISD17-ASffaa_0_1101.ca.crt")
+	payloadPath := filepath.Join(signPath, "payload")
+	signedPayloadPath := filepath.Join(signPath, "payload.signed")
+	asKeyPath := filepath.Join(signPath, "ISD17-ASffaa_1_1.cp.as.key")
+	asCertPath := filepath.Join(signPath, "ISD17-ASffaa_1_1.as.pem")
+	caCertPath := filepath.Join(signPath, "ISD17-ASffaa_0_1101.ca.crt")
 	err = exec.Command("openssl", "cms", "-sign", "-text",
 		"-in", payloadPath, "-out", signedPayloadPath, "-inkey", asKeyPath,
 		"-signer", asCertPath, "-certfile", caCertPath).Run()
@@ -218,7 +218,7 @@ func TestVerify(t *testing.T) {
 	}
 
 	// Verify signed payload
-	bootstrapperPath := path.Join(tmpDir, "bootstrapper")
+	bootstrapperPath := filepath.Join(tmpDir, "bootstrapper")
 	err = os.MkdirAll(bootstrapperPath, 0775)
 	if err != nil {
 		log.Error("Failed to create bootstrapper test directory for testrun",
@@ -230,7 +230,7 @@ func TestVerify(t *testing.T) {
 		log.Error("Failed copying signed payload", "err", err)
 	}
 	defer signedPayload.Close()
-	payloadPath = path.Join(bootstrapperPath, "topology.signed")
+	payloadPath = filepath.Join(bootstrapperPath, "topology.signed")
 	payloadFile, err := os.Create(payloadPath)
 	if err != nil {
 		log.Error("Failed copying signed payload", "err", err)
@@ -244,12 +244,12 @@ func TestVerify(t *testing.T) {
 	if err != nil {
 		log.Error("Failed copying signed payload", "err", err)
 	}
-	trcsPath := path.Join(tmpDir, "certs")
+	trcsPath := filepath.Join(tmpDir, "certs")
 	err = os.MkdirAll(trcsPath, 0775)
 	if err != nil {
 		log.Error("Failed to create certs test directory for testrun", "dir", tmpDir, "err", err)
 	}
-	trcPath := path.Join(trcsPath, "ISD17-B1-S1.trc")
+	trcPath := filepath.Join(trcsPath, "ISD17-B1-S1.trc")
 	err = os.WriteFile(trcPath, []byte(isd17B1S1trc), 0666)
 	if err != nil {
 		log.Error("Failed writing TRC file", "err", err)

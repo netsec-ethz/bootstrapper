@@ -23,7 +23,7 @@ import (
 	"io"
 	"net"
 	"os"
-	"path"
+	"path/filepath"
 
 	"github.com/inconshreveable/log15"
 	"github.com/pelletier/go-toml"
@@ -64,7 +64,7 @@ type Config struct {
 }
 
 func (c Config) WorkingDir() string {
-	return path.Join(c.SciondConfigDir, "bootstrapper")
+	return filepath.Join(c.SciondConfigDir, "bootstrapper")
 }
 
 // LogConfig is the configuration for the logger.

@@ -22,7 +22,7 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -79,7 +79,7 @@ func PullTopology(outputPath string, addr *net.TCPAddr) error {
 	if err != nil {
 		return fmt.Errorf("unable to parse RWTopology from JSON bytes: %w", err)
 	}*/
-	topologyPath := path.Join(outputPath, topologyJSONFileName)
+	topologyPath := filepath.Join(outputPath, topologyJSONFileName)
 	err = os.WriteFile(topologyPath, raw, 0644)
 	if err != nil {
 		return fmt.Errorf("bootstrapper could not store topology: %w", err)
@@ -98,7 +98,7 @@ func PullSignedTopology(workingDir string, addr *net.TCPAddr) error {
 	if err != nil {
 		return err
 	}
-	signedTopologyPath := path.Join(workingDir, signedTopologyFileName)
+	signedTopologyPath := filepath.Join(workingDir, signedTopologyFileName)
 	err = os.WriteFile(signedTopologyPath, raw, 0644)
 	if err != nil {
 		return fmt.Errorf("bootstrapper could not store topology signature: %w", err)
@@ -143,7 +143,8 @@ func PullTRCs(outputPath, workingDir string, addr *net.TCPAddr, securityMode con
 		// Wipe symlinks to TRCs fetched in insecure mode, if we are not using the insecure mode
 		err = wipeInsecureSymlinks(outputPath)
 		if err != nil {
-			log.Warn("Unable to remove symlinks to insecure TRCs", "err", err)
+			log.Error("Unable to remove symlinks to insecure TRCs", "err", err)
+			return err
 		}
 	}
 
@@ -165,7 +166,7 @@ func buildTRCsURL(addr *net.TCPAddr) string {
 
 func wipeInsecureSymlinks(outputPath string) error {
 	// do a lstat on the directory
-	trcs, err := os.ReadDir(path.Join(outputPath, "certs"))
+	trcs, err := os.ReadDir(filepath.Join(outputPath, "certs"))
 	if err != nil {
 		return err
 	}
@@ -184,12 +185,13 @@ func wipeInsecureSymlinks(outputPath string) error {
 			continue
 		}
 		// stat the symlink, check if it links to a TRC from the insecure mode
-		symlinkPath := path.Join(outputPath, "certs", trc.Name())
-		fInfo, err = os.Stat(symlinkPath)
+		symlinkPath := filepath.Join(outputPath, "certs", trc.Name())
+		symlinkTarget, err := os.Readlink(symlinkPath)
 		if err != nil {
 			return err
 		}
-		if strings.HasSuffix(fInfo.Name(), ".insecure") {
+		fInfo, err = os.Stat(symlinkTarget)
+		if err != nil || strings.HasSuffix(fInfo.Name(), ".insecure") {
 			// unlink
 			err = os.Remove(symlinkPath)
 			if err != nil {
@@ -201,7 +203,7 @@ func wipeInsecureSymlinks(outputPath string) error {
 }
 
 func PullTRC(outputPath, workingDir string, addr *net.TCPAddr, securityMode config.SecurityMode, trcID TRCID) error {
-	trcPath := path.Join(outputPath, "certs",
+	trcPath := filepath.Join(outputPath, "certs",
 		fmt.Sprintf("ISD%d-B%d-S%d.trc", trcID.Isd, trcID.BaseNumber, trcID.SerialNumber))
 	if _, err := os.Stat(trcPath); !os.IsNotExist(err) {
 		log.Info("identical TRC version already exists, not overwritting: path: %s : %w", trcPath, err)
@@ -213,7 +215,7 @@ func PullTRC(outputPath, workingDir string, addr *net.TCPAddr, securityMode conf
 		return err
 	}
 	// Mark TRCs downloaded in the insecure mode as such
-	tmpTRCpath := path.Join(workingDir,
+	tmpTRCpath := filepath.Join(workingDir,
 		fmt.Sprintf("ISD%d-B%d-S%d.trc.insecure", trcID.Isd, trcID.BaseNumber, trcID.SerialNumber))
 	err = os.WriteFile(tmpTRCpath, raw, 0644)
 	if err != nil {
@@ -225,7 +227,7 @@ func PullTRC(outputPath, workingDir string, addr *net.TCPAddr, securityMode conf
 		err = verifyTRCUpdateChain(outputPath, tmpTRCpath, true)
 	case config.Permissive:
 		err = verifyTRCUpdateChain(outputPath, tmpTRCpath, false)
-	case  config.Insecure:
+	case config.Insecure:
 	default:
 		return fmt.Errorf("invalid security mode: %v", securityMode)
 	}
