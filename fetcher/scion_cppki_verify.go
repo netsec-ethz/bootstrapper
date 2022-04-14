@@ -34,12 +34,13 @@ import (
 	log "github.com/inconshreveable/log15"
 )
 
-type topoIA struct {
-	IA string `json:"isd_as"`
-}
+const (
+	verifyTimeout      = 3 * time.Second
+	updateChainTimeout = 1 * time.Second
+)
 
 // verifyTopologySignature verifies the signature of the signed topology in workingDir
-// and stores the verified topology the in outputPath.
+// and stores the verified topology in outputPath.
 func verifyTopologySignature(outputPath, workingDir string) error {
 	// The signature is of the type `ecdsa-with-SHA256`:
 	// openssl cms -sign -text -in topology -out topology.signed -inkey as.key -signer as.cert.pem -certfile ca.cert.pem
@@ -48,64 +49,22 @@ func verifyTopologySignature(outputPath, workingDir string) error {
 	// Use the existing functionality of the `scion-pki` tool to verify a two level certificate chain
 	// consisting of (as_cert, ca_cert) back to a TRC (chain) with included root_certs.
 
-	// Signature verification should complete in a timely manner since it is a local operation
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel, verifyPath, err := setupVerifyEnv(workingDir)
+	if err != nil {
+		return err
+	}
 	defer cancel()
 
-	for _, tool := range []string{"openssl", "scion-pki"} {
-		if _, err := exec.LookPath(tool); err != nil {
-			return err
-		}
-	}
-
-	// Create verify directory
-	timestamp := time.Now().Unix()
-	verifyPath := filepath.Join(workingDir, fmt.Sprintf("verify-%d", timestamp))
-	err := os.Mkdir(verifyPath, 0775)
-	if err != nil {
-		return fmt.Errorf("failed to create verify directory: dir: %s, err: %w", verifyPath, err)
-	}
-
 	signedTopology := filepath.Join(workingDir, signedTopologyFileName)
-	detachedSignaturePath := filepath.Join(verifyPath, "detached_signature.p7s")
-	// detach signature for further validation:
-	if err = opensslSMIMEPk7out(ctx, signedTopology, detachedSignaturePath); err != nil {
-		return fmt.Errorf("unable to detach signature: %w", err)
-	}
-
-	asCertHumanChain := filepath.Join(verifyPath, "as_cert_chain.human.pem")
-	// collect included certificates from detached signature:
-	if err = opensslPKCS7Certs(ctx, detachedSignaturePath, asCertHumanChain); err != nil {
-		return fmt.Errorf("unable to gather included certificates from signature: %w", err)
-	}
-
-	// Split signer and ca certificate
-	certs, rawCerts, err := getCertsFromBundle(asCertHumanChain)
-	if err != nil {
-		return err
-	}
-	asCert := certs[0]
-
-	// Store certificate chain extracted from signature
-	asCertChainPath := filepath.Join(verifyPath, "as_cert_chain.pem")
-	rawASCertChain := strings.Join(rawCerts, "\n")
-	_ = os.WriteFile(asCertChainPath, []byte(rawASCertChain), 0666)
-
-	// Get TRCs corresponding to signer IA
-	signerIA, signerTRCid, err := getCertIA(asCert)
+	signerTRCid, signerIA, asCertChainPath, err := extractSignerInfo(ctx, signedTopology, verifyPath)
 	if err != nil {
 		return err
 	}
 
-	trcs, err := getTRCsByISDid(outputPath, signerTRCid)
+	sortedTRCsPaths, err := sortedTRCsPathsByISD(outputPath, signerTRCid)
 	if err != nil {
 		return err
 	}
-	if len(trcs) == 0 {
-		return fmt.Errorf("unable to verify signature, no valid TRC found in %s,  ISD id: %d",
-			outputPath, signerTRCid)
-	}
-	sortedTRCsPaths := sortTRCsFiles(trcs).Paths()
 
 	// verify the AS certificate chain (but not the payload signature) back to the TRCs of the ISD follows the
 	// SCION CP PKI rules about cert type, key usage:
@@ -138,6 +97,43 @@ func verifyTopologySignature(outputPath, workingDir string) error {
 	return err
 }
 
+func setupVerifyEnv(workingDir string) (ctx context.Context, cancel context.CancelFunc, verifyPath string, err error) {
+	// Signature verification should complete in a timely manner since it is a local operation
+	ctx, cancel = context.WithTimeout(context.Background(), verifyTimeout)
+
+	for _, tool := range []string{"openssl", "scion-pki"} {
+		if _, err = exec.LookPath(tool); err != nil {
+			return
+		}
+	}
+
+	// Create verify directory
+	timestamp := time.Now().Unix()
+	verifyPath = filepath.Join(workingDir, fmt.Sprintf("verify-%d", timestamp))
+	err = os.Mkdir(verifyPath, 0775)
+	if err != nil {
+		err = fmt.Errorf("failed to create verify directory: dir: %s, err: %w", verifyPath, err)
+		return
+	}
+	return
+}
+
+func sortedTRCsPathsByISD(outputPath string, signerTRCid int64) (sortedTRCsPaths []string, err error) {
+	trcs, err := getTRCsByISDid(outputPath, signerTRCid)
+	if err != nil {
+		return
+	}
+	if len(trcs) == 0 {
+		err = fmt.Errorf("unable to verify signature, no valid TRC found in %s,  ISD id: %d",
+			outputPath, signerTRCid)
+		return
+	}
+	sortedTRCsPaths = sortTRCsFiles(trcs).Paths()
+	return
+}
+
+// verifyWithRootBundle verifies the signature of signedTopology, by extracting the root certificates in trustAnchorTRC
+// into the verifyPath directory, and write the payload to unvalidatedTopologyPath
 func verifyWithRootBundle(ctx context.Context,
 	signedTopology, unvalidatedTopologyPath, trustAnchorTRC, verifyPath string) (err error) {
 
@@ -151,6 +147,47 @@ func verifyWithRootBundle(ctx context.Context,
 	// verify the signature and certificate chain back to a root certs bundle, write out the payload:
 	if err = opensslCMSVerifyOutput(ctx, signedTopology, rootCertsBundlePath, unvalidatedTopologyPath); err != nil {
 		return fmt.Errorf("verifying and extracting signed payload failed: %w", err)
+	}
+	return
+}
+
+// extractSignerInfo detaches the signature from signedTopology into the verifyPath directory and
+// returns the signerTRCid, signerIA and the path asCertChainPath to a bundle containing the signer and ca certificate.
+func extractSignerInfo(ctx context.Context, signedTopology, verifyPath string) (signerTRCid int64,
+	signerIA, asCertChainPath string, err error) {
+
+	detachedSignaturePath := filepath.Join(verifyPath, "detached_signature.p7s")
+	// detach signature for further validation:
+	err = opensslSMIMEPk7out(ctx, signedTopology, detachedSignaturePath)
+	if err != nil {
+		err = fmt.Errorf("unable to detach signature: %w", err)
+		return
+	}
+
+	asCertHumanChain := filepath.Join(verifyPath, "as_cert_chain.human.pem")
+	// collect included certificates from detached signature:
+	err = opensslPKCS7Certs(ctx, detachedSignaturePath, asCertHumanChain)
+	if err != nil {
+		err = fmt.Errorf("unable to gather included certificates from signature: %w", err)
+		return
+	}
+
+	// Split signer and CA certificate
+	certs, rawCerts, err := getCertsFromBundle(asCertHumanChain)
+	if err != nil {
+		return
+	}
+	asCert := certs[0]
+
+	// Store certificate chain extracted from signature
+	asCertChainPath = filepath.Join(verifyPath, "as_cert_chain.pem")
+	rawASCertChain := strings.Join(rawCerts, "\n")
+	_ = os.WriteFile(asCertChainPath, []byte(rawASCertChain), 0666)
+
+	// Get signer information from AS certificate
+	signerIA, signerTRCid, err = getCertIA(asCert)
+	if err != nil {
+		return
 	}
 	return
 }
@@ -190,7 +227,7 @@ func getCertsFromBundle(asCertHumanChain string) ([]*x509.Certificate, []string,
 
 // verifyTRCUpdateChain verifies the TRC at candidateTRCPath has a valid update chain to the other TRCs of the same ISD.
 func verifyTRCUpdateChain(outputPath, candidateTRCPath string, strict bool) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), updateChainTimeout)
 	defer cancel()
 	trc, err := readTRCSummary(candidateTRCPath)
 	if err != nil {
@@ -394,6 +431,10 @@ func (s sortedTRCFileSummaries) Paths() []string {
 		trcPaths = append(trcPaths, trcSummary.path)
 	}
 	return trcPaths
+}
+
+type topoIA struct {
+	IA string `json:"isd_as"`
 }
 
 // asn1ID is used to encode and decode the TRC ID.

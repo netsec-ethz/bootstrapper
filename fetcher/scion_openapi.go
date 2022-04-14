@@ -47,7 +47,7 @@ const (
 	httpRequestTimeout     = 2 * time.Second
 )
 
-func FetchConfiguration(outputPath string, workingDir string, securityMode config.SecurityMode, addr *net.TCPAddr) error {
+func FetchConfiguration(outputPath, workingDir string, securityMode config.SecurityMode, addr *net.TCPAddr) error {
 	err := PullTRCs(outputPath, workingDir, addr, securityMode)
 	if err != nil {
 		return err
