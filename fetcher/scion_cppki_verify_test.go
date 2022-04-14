@@ -15,6 +15,7 @@
 package fetcher
 
 import (
+	"context"
 	log "github.com/inconshreveable/log15"
 	"io"
 	"os"
@@ -260,4 +261,54 @@ func TestVerify(t *testing.T) {
 		log.Error("Signature verification failed: verifyTopologySignature", "err", err)
 		t.FailNow()
 	}
+}
+
+func TestExtractSignerInfo(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "bootstrapper-cppki-tests_*")
+	if err != nil {
+		log.Error("Failed to create test directory for testrun", "dir", tmpDir, "err", err)
+	}
+	// Dump files payload, isd17ASffaa_0_1101CAcrt, isd17ASffaa_1_1aspem, isd17ASffaa_1_1cpASkey to directory sign
+	files := map[string]string{
+		"payload":                    payload,
+		"ISD17-ASffaa_0_1101.ca.crt": isd17ASffaa_0_1101CAcrt,
+		"ISD17-ASffaa_1_1.as.pem":    isd17ASffaa_1_1aspem,
+		"ISD17-ASffaa_1_1.cp.as.key": isd17ASffaa_1_1cpASkey}
+	for fileName, fileContent := range files {
+		filePath := filepath.Join(tmpDir, fileName)
+		err = os.WriteFile(filePath, []byte(fileContent), 0666)
+		if err != nil {
+			log.Error("Failed writing files required for signing", "signPath", tmpDir, "err", err)
+		}
+	}
+	payloadPath := filepath.Join(tmpDir, "payload")
+	signedPayloadPath := filepath.Join(tmpDir, "payload.signed")
+	asKeyPath := filepath.Join(tmpDir, "ISD17-ASffaa_1_1.cp.as.key")
+	asCertPath := filepath.Join(tmpDir, "ISD17-ASffaa_1_1.as.pem")
+	caCertPath := filepath.Join(tmpDir, "ISD17-ASffaa_0_1101.ca.crt")
+	err = exec.Command("openssl", "cms", "-sign", "-text",
+		"-in", payloadPath, "-out", signedPayloadPath, "-inkey", asKeyPath,
+		"-signer", asCertPath, "-certfile", caCertPath).Run()
+	if err != nil {
+		log.Error("Failed to create signed file", "signedPayloadPath", signedPayloadPath, "err", err)
+	}
+	signerTRCid, signerIA, asCertChainPath, err := extractSignerInfo(context.TODO(), signedPayloadPath, tmpDir)
+	if err != nil {
+		log.Error("Getting signer info failed: extractSignerInfo", "err", err)
+		t.FailNow()
+	}
+	if signerTRCid != 17 {
+		log.Error("signerTRCid mismatch", "expected", 1, "actual", signerTRCid)
+		t.FailNow()
+	}
+	if signerIA != "17-ffaa:1:1" {
+		log.Error("signerTRCid mismatch", "expected", "", "actual", signerIA)
+		t.FailNow()
+	}
+	if asCertChainPath != filepath.Join(tmpDir, "as_cert_chain.pem") {
+		log.Error("signerTRCid mismatch",
+			"expected",  filepath.Join(tmpDir, "as_cert_chain.pem"), "actual", asCertChainPath)
+		t.FailNow()
+	}
+	return
 }

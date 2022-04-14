@@ -181,7 +181,7 @@ func wipeInsecureSymlinks(outputPath string) error {
 			return err
 		}
 		// ignore non-symlinks
-		if fInfo.Mode()&os.ModeSymlink != 1 {
+		if fInfo.Mode()&os.ModeType != os.ModeSymlink {
 			continue
 		}
 		// stat the symlink, check if it links to a TRC from the insecure mode
@@ -241,7 +241,7 @@ func PullTRC(outputPath, workingDir string, addr *net.TCPAddr, securityMode conf
 	}
 	if securityMode == config.Insecure {
 		// symlink the TRC fetched in insecure mode into the standard directory
-		err = os.Symlink(trcPath, tmpTRCpath)
+		err = os.Symlink(tmpTRCpath, trcPath)
 		if err != nil {
 			return fmt.Errorf("symlinking insecure TRC failed: %w", err)
 		}
