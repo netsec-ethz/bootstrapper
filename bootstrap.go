@@ -18,6 +18,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"sync"
 	"time"
@@ -66,13 +67,18 @@ func NewBootstrapper(cfg *config.Config) (*Bootstrapper, error) {
 }
 
 func (b *Bootstrapper) tryBootstrapping() error {
-	hintGenerators := []hinting.HintGenerator{
+	var hintGenerators []hinting.HintGenerator
+	ipv6Addrs := ifaceIPv6Addrs(b.iface)
+	if len(ipv6Addrs) > 0 {
+		hintGenerators = append(hintGenerators, hinting.NewDHCPv6HintGenerator(&cfg.DHCPv6, b.iface))
+	}
+	hintGenerators = append(hintGenerators,
 		hinting.NewMockHintGenerator(&cfg.MOCK),
 		hinting.NewDHCPHintGenerator(&cfg.DHCP, b.iface),
 		// XXX: DNS-SD depends on DNS resolution working, which can depend on DHCP for getting the local DNS resolver IP
 		hinting.NewDNSSDHintGenerator(&cfg.DNSSD),
 		// XXX: mDNS depends on the DNS search domain to be correct, which can depend on DHCP for getting it
-		hinting.NewMDNSHintGenerator(&cfg.MDNS, b.iface)}
+		hinting.NewMDNSHintGenerator(&cfg.MDNS, b.iface))
 	wg := sync.WaitGroup{}
 	for _, g := range hintGenerators {
 		wg.Add(1)
@@ -109,4 +115,18 @@ OuterLoop:
 		}
 	}
 	return nil
+}
+
+func ifaceIPv6Addrs(iface *net.Interface) (ips []netip.Addr) {
+	addrs, err := iface.Addrs()
+	if err != nil {
+		return
+	}
+	for _, addr := range addrs {
+		ipPort, err := netip.ParseAddrPort(addr.String())
+		if err == nil && ipPort.Addr().Is6() {
+			ips = append(ips, ipPort.Addr())
+		}
+	}
+	return
 }
