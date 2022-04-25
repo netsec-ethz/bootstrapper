@@ -54,13 +54,14 @@ var (
 
 type Config struct {
 	InterfaceName   string
-	SciondConfigDir string                        `toml:"sciond_config_dir"`
-	SecurityMode    SecurityMode                  `toml:"security_mode,omitempty"`
-	MOCK            hinting.MOCKHintGeneratorConf `toml:"mock"`
-	DHCP            hinting.DHCPHintGeneratorConf `toml:"dhcp"`
-	DNSSD           hinting.DNSHintGeneratorConf  `toml:"dnssd"`
-	MDNS            hinting.MDNSHintGeneratorConf `toml:"mdns"`
-	Logging         LogConfig                     `toml:"log,omitempty"`
+	SciondConfigDir string                          `toml:"sciond_config_dir"`
+	SecurityMode    SecurityMode                    `toml:"security_mode,omitempty"`
+	MOCK            hinting.MOCKHintGeneratorConf   `toml:"mock"`
+	DHCP            hinting.DHCPHintGeneratorConf   `toml:"dhcp"`
+	DHCPv6          hinting.DHCPv6HintGeneratorConf `toml:"dhcpv6"`
+	DNSSD           hinting.DNSHintGeneratorConf    `toml:"dnssd"`
+	MDNS            hinting.MDNSHintGeneratorConf   `toml:"mdns"`
+	Logging         LogConfig                       `toml:"log,omitempty"`
 }
 
 func (c Config) WorkingDir() string {
