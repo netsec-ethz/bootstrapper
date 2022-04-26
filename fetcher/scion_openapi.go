@@ -206,7 +206,7 @@ func PullTRC(outputPath, workingDir string, addr *net.TCPAddr, securityMode conf
 	trcPath := filepath.Join(outputPath, "certs",
 		fmt.Sprintf("ISD%d-B%d-S%d.trc", trcID.Isd, trcID.BaseNumber, trcID.SerialNumber))
 	if _, err := os.Stat(trcPath); !os.IsNotExist(err) {
-		log.Info("identical TRC version already exists, not overwritting: path: %s : %w", trcPath, err)
+		log.Info("identical TRC version already exists, not overwriting", "path", trcPath)
 		return nil
 	}
 	url := buildTRCURL(addr, trcID)
