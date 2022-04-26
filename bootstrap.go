@@ -53,7 +53,7 @@ func NewBootstrapper(cfg *config.Config) (*Bootstrapper, error) {
 	}
 
 	var iface *net.Interface
-	if cfg.DHCP.Enable || cfg.MDNS.Enable {
+	if cfg.DHCP.Enable || cfg.DHCPv6.Enable || cfg.MDNS.Enable {
 		var err error
 		iface, err = net.InterfaceByName(cfg.InterfaceName)
 		if err != nil {
@@ -118,14 +118,18 @@ OuterLoop:
 }
 
 func ifaceIPv6Addrs(iface *net.Interface) (ips []netip.Addr) {
-	addrs, err := iface.Addrs()
+	ifaddrs, err := iface.Addrs()
 	if err != nil {
 		return
 	}
-	for _, addr := range addrs {
-		ipPort, err := netip.ParseAddrPort(addr.String())
-		if err == nil && ipPort.Addr().Is6() {
-			ips = append(ips, ipPort.Addr())
+	for _, ifaddr := range ifaddrs {
+		ifaddr, ok := ifaddr.(*net.IPNet)
+		if !ok {
+			continue
+		}
+		ip, ok := netip.AddrFromSlice(ifaddr.IP)
+		if ok && ip.Is6() {
+			ips = append(ips, ip)
 		}
 	}
 	return
