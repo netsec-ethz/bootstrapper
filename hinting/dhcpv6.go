@@ -16,16 +16,30 @@ package hinting
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"net"
+	"net/netip"
 
 	log "github.com/inconshreveable/log15"
 	"github.com/insomniacslk/dhcp/dhcpv6"
 	"github.com/insomniacslk/dhcp/dhcpv6/client6"
+	"github.com/insomniacslk/dhcp/iana"
+)
+
+type DUIDType string
+
+const (
+	duidLL   DUIDType = "DUID-LL"   // DUID based on Link-layer Address
+	duidLLT  DUIDType = "DUID-LLT"  // DUID based on Link-layer Address Plus Time (default)
+	duidEN   DUIDType = "DUID-EN"   // (Not implemented) DUID assigned by vendor based on Enterprise Number
+	duidUUID DUIDType = "DUID-UUID" // (Not implemented) DHCPv6 Unique Identifier based on Universally Unique IDentifier
 )
 
 type DHCPv6HintGeneratorConf struct {
-	Enable bool `toml:"Enable"`
+	Enable   bool     `toml:"Enable"`
+	ClientID string   `toml:"client_id,omitempty"` // Fixed hex string for the client DUID, no separators, no 0x prefix
+	Duid     DUIDType `toml:"DUID_type,omitempty"` // Type of DUID to compute dynamically
 }
 
 var _ HintGenerator = (*DHCPv6HintGenerator)(nil)
@@ -45,7 +59,18 @@ func (g *DHCPv6HintGenerator) Generate(ipHintsChan chan<- net.TCPAddr) {
 	}
 	log.Info("DHCPv6 Probing", "interface", g.iface.Name)
 	client := client6.NewClient()
-	conv, err := client.Exchange(g.iface.Name)
+	// request vendor options
+	modifiers := []dhcpv6.Modifier{dhcpv6.WithRequestedOptions(dhcpv6.OptionVendorOpts)}
+	// set configured client DUID
+	if g.cfg.ClientID != "" || g.cfg.Duid != "" {
+		duid, err := getDuid(g)
+		if err != nil {
+			log.Error("Error setting DHCPv6 client DUID", "err", err)
+		} else {
+			modifiers = append(modifiers, dhcpv6.WithClientID(duid))
+		}
+	}
+	conv, err := client.Exchange(g.iface.Name, modifiers...)
 	if err != nil {
 		log.Error("Error during DHCPv6 solicit interaction", "err", err)
 		return
@@ -55,11 +80,53 @@ func (g *DHCPv6HintGenerator) Generate(ipHintsChan chan<- net.TCPAddr) {
 	log.Info("DHCPv6 hinting done")
 }
 
+func getDuid(g *DHCPv6HintGenerator) (duid dhcpv6.Duid, err error) {
+	if g.cfg.ClientID != "" {
+		var clientID []byte
+		clientID, err = hex.DecodeString(g.cfg.ClientID)
+		if err != nil {
+			return
+		}
+		var duidp *dhcpv6.Duid
+		duidp, err = dhcpv6.DuidFromBytes(clientID)
+		if err != nil {
+			return
+		}
+		return *duidp, nil
+	}
+	switch g.cfg.Duid {
+	case duidLL:
+		duid = dhcpv6.Duid{
+			Type:          dhcpv6.DUID_LL,
+			HwType:        iana.HWTypeEthernet,
+			LinkLayerAddr: g.iface.HardwareAddr,
+		}
+	case duidLLT:
+		duid = dhcpv6.Duid{
+			Type:          dhcpv6.DUID_LLT,
+			HwType:        iana.HWTypeEthernet,
+			Time:          dhcpv6.GetTime(),
+			LinkLayerAddr: g.iface.HardwareAddr,
+		}
+	case duidEN, duidUUID:
+		// Not implemented
+		log.Error("Unsupported DUID type %s, set DUID directly as `client_id` " +
+			"or use the supported `DUID-LL` and `DUID-LLT`types.", "type", g.cfg.Duid)
+		err = fmt.Errorf("not implemented DUID type: %s", g.cfg.Duid)
+	default:
+		err = fmt.Errorf("invalid DUID type: %s", g.cfg.Duid)
+	}
+	return
+}
+
 func (g *DHCPv6HintGenerator) dispatchIPHints(conv []dhcpv6.DHCPv6, ipHintChan chan<- net.TCPAddr) {
 	if !g.cfg.Enable {
 		return
 	}
 	for _, p := range conv {
+		if p.Type() != dhcpv6.MessageTypeReply {
+			continue
+		}
 		options := p.GetOption(dhcpv6.OptionVendorOpts)
 		for _, option := range options {
 			if oVSIO, ok := option.(*dhcpv6.OptVendorOpts); ok {
@@ -68,7 +135,7 @@ func (g *DHCPv6HintGenerator) dispatchIPHints(conv []dhcpv6.DHCPv6, ipHintChan c
 					log.Error("Failed to parse Vendor-specific Information Option", "err", err)
 					continue
 				}
-				addr := net.TCPAddr{IP: ip, Port: port}
+				addr := net.TCPAddr{IP: ip.AsSlice(), Port: port}
 				log.Info("DHCPv6 vi-encap hint", "Addr", addr)
 				ipHintChan <- addr
 			}
@@ -77,34 +144,40 @@ func (g *DHCPv6HintGenerator) dispatchIPHints(conv []dhcpv6.DHCPv6, ipHintChan c
 }
 
 func (g *DHCPv6HintGenerator) dispatchDNSInfo(conv []dhcpv6.DHCPv6, dnsChan chan<- DNSInfo) {
-	var resolvers []net.IP
-	var searchDomains []string
+	resolvers := make(map[netip.Addr]struct{})
+	searchDomains := make(map[string]struct{})
 	for _, p := range conv {
 		options := p.GetOption(dhcpv6.OptionDNSRecursiveNameServer)
 		for _, option := range options {
 			if oRDNS, ok := option.(*dhcpv6.OptDNSRecursiveNameServer); ok {
-				resolvers = append(resolvers, oRDNS.NameServers...)
+				for _, resolver := range oRDNS.NameServers {
+					if resolver, ok := netip.AddrFromSlice(resolver); ok {
+						resolvers[resolver] = struct{}{}
+					}
+				}
 			}
 		}
 		options = p.GetOption(dhcpv6.OptionDomainSearchList)
 		for _, option := range options {
 			if oDNSSL, ok := option.(*dhcpv6.OptDomainSearchList); ok {
-				searchDomains = append(searchDomains, oDNSSL.DomainSearchList.Labels...)
+				for _, searchDomain := range oDNSSL.DomainSearchList.Labels {
+					searchDomains[searchDomain] = struct{}{}
+				}
 			}
 		}
 	}
 	if len(resolvers) < 1 {
 		return
 	}
-	log.Debug("DHCP DNS resolver option", "resolvers", resolvers)
-	log.Debug("DHCP DNS search domain option", "searchDomains", searchDomains)
 	dnsInfo := DNSInfo{resolvers: []string{}, searchDomains: []string{}}
-	for _, r := range resolvers {
+	for r, _ := range resolvers {
 		dnsInfo.resolvers = append(dnsInfo.resolvers, r.String())
 	}
-	for _, d := range searchDomains {
+	for d, _ := range searchDomains {
 		dnsInfo.searchDomains = append(dnsInfo.searchDomains, d)
 	}
+	log.Debug("DHCPv6 DNS resolver option", "resolvers", dnsInfo.resolvers)
+	log.Debug("DHCPv6 DNS search domain option", "searchDomains", dnsInfo.searchDomains)
 	dnsInfoWriters.Add(1)
 	select {
 	case <-dnsInfoDone:
@@ -115,10 +188,10 @@ func (g *DHCPv6HintGenerator) dispatchDNSInfo(conv []dhcpv6.DHCPv6, dnsChan chan
 	dnsInfoWriters.Done()
 }
 
-func parseBootstrapVendorInformationOption(vsio dhcpv6.OptVendorOpts) (ip net.IP, port int, err error) {
+func parseBootstrapVendorInformationOption(vsio dhcpv6.OptVendorOpts) (ip netip.Addr, port int, err error) {
 	// Parses a Vendor-specific Information Option for DHCPv6 as defined in RFC3315.
-	// `optionsBytes` should only contains the option's values byte stream, starting with the PEN,
-	// and be already stripped of the 2-byte option code and 2-byte option length.
+	// `vsio.VendorOpts.ToBytes()` should only contains the option's values byte stream, starting WITHOUT the PEN,
+	// and includes the 2-byte option code and 2-byte option length for each field.
 	//
 	//
 	// The enterprise number used to identify the option is the Private Enterprise Number
@@ -138,10 +211,10 @@ func parseBootstrapVendorInformationOption(vsio dhcpv6.OptVendorOpts) (ip net.IP
 	// An IPv6 address is encoded as a 16 byte sequence with type code 3.
 	// A UDP port is encoded as a 2 byte sequence with type code 2.
 	//
-	//    Code   Len   Vendor-specific information
-	//   +-----+-----+-----+-----+---
-	//   |  tc |  n  |  i1 |  i2 | ...
-	//   +-----+-----+-----+-----+---
+	//    Code         Len         Vendor-specific information
+	//   +-----+-----+-----+-----+-----+-----+---
+	//   |     tc    |     n     |  i1 |  i2 | ...
+	//   +-----+-----+-----+-----+-----+-----+---
 	//
 
 	// Anapaya Systems Private Enterprise Number
@@ -160,13 +233,11 @@ func parseBootstrapVendorInformationOption(vsio dhcpv6.OptVendorOpts) (ip net.IP
 	for _, field := range vsio.VendorOpts {
 		switch typeCode(field.Code()) {
 		case typeIPv6:
-			ip = field.ToBytes()
-			if len(ip) != 16 ||
-				(!ip.IsGlobalUnicast() && !ip.IsLinkLocalUnicast() && !ip.IsLoopback() && !ip.IsPrivate()) {
-
+			var ok bool
+			ip, ok = netip.AddrFromSlice(field.ToBytes())
+			if !ok || !ip.Is6() {
 				err = fmt.Errorf("failed to parse DHCPv6 Vendor-specific Information Option (17), "+
-					"invalid IP: %s", ip.String())
-				ip = nil
+					"IPv6 parse error: wrong length: %d byte(s)", len(field.ToBytes()))
 				return
 			}
 		case typePort:
@@ -181,6 +252,12 @@ func parseBootstrapVendorInformationOption(vsio dhcpv6.OptVendorOpts) (ip net.IP
 			log.Debug("Skipping unknown DHCPv6 Vendor-specific Information Option (17) field type",
 				"type", field.Code(), "length", len(field.ToBytes()))
 		}
+	}
+	if !ip.IsValid() || !ip.IsGlobalUnicast() && !ip.IsLinkLocalUnicast() && !ip.IsLoopback() && !ip.IsPrivate() {
+		err = fmt.Errorf("failed to parse DHCPv6 Vendor-specific Information Option (17), "+
+			"invalid IPv6 address type: %s", ip)
+		ip = netip.Addr{}
+		return
 	}
 	return
 }
