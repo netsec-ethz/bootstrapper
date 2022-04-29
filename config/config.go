@@ -59,6 +59,7 @@ type Config struct {
 	MOCK            hinting.MOCKHintGeneratorConf   `toml:"mock"`
 	DHCP            hinting.DHCPHintGeneratorConf   `toml:"dhcp"`
 	DHCPv6          hinting.DHCPv6HintGeneratorConf `toml:"dhcpv6"`
+	IPv6            hinting.IPv6HintGeneratorConf   `toml:"ipv6"`
 	DNSSD           hinting.DNSHintGeneratorConf    `toml:"dnssd"`
 	MDNS            hinting.MDNSHintGeneratorConf   `toml:"mdns"`
 	Logging         LogConfig                       `toml:"log,omitempty"`

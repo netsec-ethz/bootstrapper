@@ -53,7 +53,7 @@ func NewBootstrapper(cfg *config.Config) (*Bootstrapper, error) {
 	}
 
 	var iface *net.Interface
-	if cfg.DHCP.Enable || cfg.DHCPv6.Enable || cfg.MDNS.Enable {
+	if cfg.DHCPv6.Enable || cfg.IPv6.Enable || cfg.DHCP.Enable || cfg.MDNS.Enable {
 		var err error
 		iface, err = net.InterfaceByName(cfg.InterfaceName)
 		if err != nil {
@@ -71,6 +71,8 @@ func (b *Bootstrapper) tryBootstrapping() error {
 	ipv6Addrs := ifaceIPv6Addrs(b.iface)
 	if len(ipv6Addrs) > 0 {
 		hintGenerators = append(hintGenerators, hinting.NewDHCPv6HintGenerator(&cfg.DHCPv6, b.iface))
+		// Get DNS information from IPv6 RAs
+		hintGenerators = append(hintGenerators, hinting.NewIPv6HintGenerator(&cfg.IPv6, b.iface))
 	}
 	hintGenerators = append(hintGenerators,
 		hinting.NewMockHintGenerator(&cfg.MOCK),
