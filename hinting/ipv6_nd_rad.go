@@ -23,6 +23,7 @@ import (
 	"golang.org/x/net/ipv6"
 	"net"
 	"net/netip"
+	"time"
 )
 
 // Use IPv6 NDP router advertisements to get DNS resolvers and DNS search lists
@@ -48,24 +49,17 @@ func (g *IPv6HintGenerator) Generate(ipHintsChan chan<- net.TCPAddr) {
 		return
 	}
 	log.Info("IPv6 Probing", "interface", g.iface.Name)
-	rs, raFilter, err := g.createRouterSolicitation()
-	if err != nil {
-		log.Error("Error creating IPv6 Router Solicitation", "err", err)
-		return
-	}
 
-	c, _, err := ndp.Listen(g.iface, ndp.Unspecified)
-	resp, err := sendReceiveLoop(context.TODO(), c, nil, &rs, netip.MustParseAddr("ff02::2"), raFilter)
+	resp, err := g.sendReceiveLoopRA()
 	if err != nil {
 		if err == context.Canceled {
-			log.Error("Error receiving IPv6 RA", "ack", resp, "err", err)
+			log.Error("Error receiving IPv6 RA", "err", err)
 			return
 		}
-		err = fmt.Errorf("failed to send RS: %w", err)
-		log.Error("Error sending IPv6 RS", "ack", resp, "err", err)
+		log.Error("Error sending IPv6 RS", "err", err)
 		return
 	}
-	if resp.Type() == ipv6.ICMPTypeRouterAdvertisement {
+	if resp.Type() != ipv6.ICMPTypeRouterAdvertisement {
 		// raFilter should already ensure this
 		log.Error("Error reading IPv6 RA response, type is not RA", "type", resp.Type())
 		return
@@ -86,10 +80,10 @@ func (g *IPv6HintGenerator) Generate(ipHintsChan chan<- net.TCPAddr) {
 		}
 	}
 	if len(resolvers) < 1 {
-		log.Info("No IPv6 hinting done")
+		log.Info("No IPv6 hinting")
 		return
 	}
-	go g.dispatchDNSInfo(resolvers, searchDomains, dnsInfoChan)
+	g.dispatchDNSInfo(resolvers, searchDomains, dnsInfoChan)
 	log.Info("IPv6 hinting done")
 }
 
@@ -148,16 +142,20 @@ func (g *IPv6HintGenerator) dispatchDNSInfo(resolvers []netip.Addr, searchDomain
 // WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
 // OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-func sendReceiveLoop(
-	ctx context.Context,
-	c *ndp.Conn,
-	ll *log.Logger,
-	m ndp.Message,
-	dst netip.Addr,
-	check func(m ndp.Message) bool,
-) (ndp.Message, error) {
+func (g *IPv6HintGenerator) sendReceiveLoopRA() (ndp.Message, error) {
+	rs, raFilter, err := g.createRouterSolicitation()
+	if err != nil {
+		return nil, fmt.Errorf("error creating IPv6 Router Solicitation: %w", err)
+	}
+
+	c, _, err := ndp.Listen(g.iface, ndp.Unspecified)
+	if err != nil {
+		return nil, fmt.Errorf("error creating ndp connection: %w", err)
+	}
+	dst := netip.MustParseAddr("ff02::2") // Multicast all routers in the link-local
+
 	for i := 0; ; i++ {
-		msg, _, err := sendReceiveRA(ctx, c, m, dst, check)
+		msg, _, err := sendReceive(context.TODO(), c, &rs, dst, raFilter)
 		switch err {
 		case context.Canceled:
 			return nil, err
@@ -173,13 +171,51 @@ func sendReceiveLoop(
 
 var errRetry = errors.New("retry")
 
-func sendReceiveRA(
+func sendReceive(
 	ctx context.Context,
 	c *ndp.Conn,
 	m ndp.Message,
 	dst netip.Addr,
 	check func(m ndp.Message) bool,
 ) (ndp.Message, netip.Addr, error) {
-	// TODO
-	return nil, netip.Addr{}, fmt.Errorf("sendReceive not implemented")
+	if err := c.WriteTo(m, nil, dst); err != nil {
+		return nil, netip.Addr{}, fmt.Errorf("failed to write message: %v", err)
+	}
+
+	return receive(ctx, c, check)
+}
+
+func receive(
+	ctx context.Context,
+	c *ndp.Conn,
+	check func(m ndp.Message) bool,
+) (ndp.Message, netip.Addr, error) {
+	if err := c.SetReadDeadline(time.Now().Add(1 * time.Second)); err != nil {
+		return nil, netip.Addr{}, fmt.Errorf("failed to set deadline: %v", err)
+	}
+
+	msg, _, from, err := c.ReadFrom()
+	if err == nil {
+		if check != nil && !check(msg) {
+			// Read a message, but it isn't the one we want.  Keep trying.
+			return nil, netip.Addr{}, errRetry
+		}
+
+		// Got a message that passed the check, if check was not nil.
+		return msg, from, nil
+	}
+
+	// Was the context canceled already?
+	select {
+	case <-ctx.Done():
+		return nil, netip.Addr{}, ctx.Err()
+	default:
+	}
+
+	// Was the error caused by a read timeout, and should the loop continue?
+	if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
+		return nil, netip.Addr{}, errRetry
+	}
+
+	return nil, netip.Addr{}, fmt.Errorf("failed to read message: %v", err)
 }
