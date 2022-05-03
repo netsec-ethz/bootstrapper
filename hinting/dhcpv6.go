@@ -132,7 +132,7 @@ func (g *DHCPv6HintGenerator) dispatchIPHints(conv []dhcpv6.DHCPv6, ipHintChan c
 			if oVSIO, ok := option.(*dhcpv6.OptVendorOpts); ok {
 				ip, port, err := parseBootstrapVendorInformationOption(*oVSIO)
 				if err != nil {
-					log.Error("Failed to parse Vendor-specific Information Option", "err", err)
+					log.Error("Failed to parse DHCPv6 Vendor-specific Information Option (17)", "err", err)
 					continue
 				}
 				addr := net.TCPAddr{IP: ip.AsSlice(), Port: port}
@@ -170,10 +170,10 @@ func (g *DHCPv6HintGenerator) dispatchDNSInfo(conv []dhcpv6.DHCPv6, dnsChan chan
 		return
 	}
 	dnsInfo := DNSInfo{resolvers: []string{}, searchDomains: []string{}}
-	for r, _ := range resolvers {
+	for r := range resolvers {
 		dnsInfo.resolvers = append(dnsInfo.resolvers, r.String())
 	}
-	for d, _ := range searchDomains {
+	for d := range searchDomains {
 		dnsInfo.searchDomains = append(dnsInfo.searchDomains, d)
 	}
 	log.Debug("DHCPv6 DNS resolver option", "resolvers", dnsInfo.resolvers)
@@ -226,8 +226,7 @@ func parseBootstrapVendorInformationOption(vsio dhcpv6.OptVendorOpts) (ip netip.
 	)
 
 	if vsio.EnterpriseNumber != AnapayaPEN {
-		err = fmt.Errorf("failed to parse DHCP Vendor Specific Option (17), "+
-			"unexpected Vendor-ID, PEN:%d", vsio.EnterpriseNumber)
+		err = fmt.Errorf("unexpected Vendor-ID, PEN:%d", vsio.EnterpriseNumber)
 		return
 	}
 	for _, field := range vsio.VendorOpts {
@@ -236,14 +235,12 @@ func parseBootstrapVendorInformationOption(vsio dhcpv6.OptVendorOpts) (ip netip.
 			var ok bool
 			ip, ok = netip.AddrFromSlice(field.ToBytes())
 			if !ok || !ip.Is6() {
-				err = fmt.Errorf("failed to parse DHCPv6 Vendor-specific Information Option (17), "+
-					"IPv6 parse error: wrong length: %d byte(s)", len(field.ToBytes()))
+				err = fmt.Errorf("IPv6 parse error: wrong length: %d byte(s)", len(field.ToBytes()))
 				return
 			}
 		case typePort:
 			if len(field.ToBytes()) != 2 {
-				err = fmt.Errorf("failed to parse DHCPv6 Vendor-specific Information Option (17), "+
-					"port parse error: wrong length: %d byte(s)", len(field.ToBytes()))
+				err = fmt.Errorf("port parse error: wrong length: %d byte(s)", len(field.ToBytes()))
 				return
 			}
 			port = int(binary.BigEndian.Uint16(field.ToBytes()))
@@ -254,8 +251,7 @@ func parseBootstrapVendorInformationOption(vsio dhcpv6.OptVendorOpts) (ip netip.
 		}
 	}
 	if !ip.IsValid() || !ip.IsGlobalUnicast() && !ip.IsLinkLocalUnicast() && !ip.IsLoopback() && !ip.IsPrivate() {
-		err = fmt.Errorf("failed to parse DHCPv6 Vendor-specific Information Option (17), "+
-			"invalid IPv6 address type: %s", ip)
+		err = fmt.Errorf("invalid IPv6 address type: %s", ip)
 		ip = netip.Addr{}
 		return
 	}
