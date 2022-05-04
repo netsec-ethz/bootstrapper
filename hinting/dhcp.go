@@ -90,7 +90,7 @@ func (g *DHCPHintGenerator) dispatchIPHints(ack *dhcpv4.DHCPv4, ipHintChan chan<
 	if dataLen > 0 {
 		ip, port, err := parseBootstrapVendorOption(VIVSBytes)
 		if err != nil {
-			log.Error("Failed to parse Vendor Identifying Vendor Specific Option", "err", err)
+			log.Error("Failed to parse Vendor Identifying Vendor Specific Option (125)", "err", err)
 			return
 		}
 		addr := net.TCPAddr{IP: ip, Port: port}
@@ -130,6 +130,16 @@ func (g *DHCPHintGenerator) dispatchDNSInfo(ack *dhcpv4.DHCPv4, dnsChan chan<- D
 	dnsInfoWriters.Done()
 }
 
+type typeCode uint8
+
+func (t typeCode) Code() uint8 {
+	return uint8(t)
+}
+
+func (t typeCode) String() string {
+	return t.String()
+}
+
 func parseBootstrapVendorOption(optionBytes []byte) (ip net.IP, port int, err error) {
 	// Parses a Vendor-Identifying Vendor Option for DHCPv4 as defined in RFC3925.
 	// `optionsBytes` should only contains the option's values byte stream, starting with the PEN,
@@ -164,7 +174,6 @@ func parseBootstrapVendorOption(optionBytes []byte) (ip net.IP, port int, err er
 
 	// Anapaya Systems Private Enterprise Number
 	const AnapayaPEN = 55324
-	type typeCode uint8
 	const (
 		typeIPv4 typeCode = iota + 1
 		typePort
@@ -173,68 +182,57 @@ func parseBootstrapVendorOption(optionBytes []byte) (ip net.IP, port int, err er
 	buffLen := len(optionBytes)
 	offset := 0
 	if offset+4 > buffLen {
-		err = fmt.Errorf("failed to parse DHCP Vendor Specific Option (125)")
+		err = fmt.Errorf("no Vendor PEN")
 		return
 	}
 	PEN := binary.BigEndian.Uint32(optionBytes[offset : offset+4])
 	offset += 4
 	if int(PEN) != AnapayaPEN {
-		err = fmt.Errorf("failed to parse DHCP Vendor Specific Option (125), "+
-			"unexpected Vendor-ID, PEN:%d", PEN)
+		err = fmt.Errorf("unexpected Vendor-ID, PEN:%d", PEN)
 		return
 	}
 	if offset+1 > buffLen {
-		err = fmt.Errorf("failed to parse DHCP Vendor Specific Option (125), " +
-			"missing data length")
+		err = fmt.Errorf("missing data length")
 		return
 	}
 	dataLen := int(optionBytes[offset])
 	offset += 1
 	if offset+dataLen > buffLen {
-		err = fmt.Errorf("failed to parse DHCP Vendor Specific Option (125), " +
-			"data length exceeds option buffer length")
+		err = fmt.Errorf("data length exceeds option buffer length")
 		return
 	}
 
-	for offset+2 <= buffLen {
-		typeCode := typeCode(optionBytes[offset])
-		offset += 1
-		typeLength := int(optionBytes[offset])
-		offset += 1
-		if offset+typeLength > buffLen || typeLength <= 0 {
-			err = fmt.Errorf("failed to parse DHCP Vendor Specific Option (125), "+
-				"wrong field length:%d", typeLength)
+	vendorData := dhcpv4.Options{}
+	err = vendorData.FromBytes(optionBytes[offset:])
+	if err != nil {
+		err = fmt.Errorf("failed to parse DHCP Option field, " +
+			"data does not match RFC2132 format")
+		return
+	}
+	field := vendorData.Get(typeIPv4)
+	if field != nil && len(field) != 0 {
+		// IP address field
+		var ipEncap dhcpv4.IP
+		err = ipEncap.FromBytes(field)
+		if err != nil {
+			err = fmt.Errorf("IP parse error: %w", err)
 			return
 		}
-		switch typeCode {
-		case typeIPv4:
-			// IP address field
-			var ipEncap dhcpv4.IP
-			err = ipEncap.FromBytes(optionBytes[offset : offset+typeLength])
-			if err != nil {
-				err = fmt.Errorf("failed to parse DHCP Vendor Specific Option (125), "+
-					"IP parse error: %w", err)
-				return
-			}
-			ip = net.IP(ipEncap)
-		case typePort:
-			// Port field
-			if typeLength != 2 {
-				err = fmt.Errorf("failed to parse DHCP Vendor Specific Option (125), "+
-					"port parse error: wrong length: %d byte(s)", typeLength)
-				return
-			}
-			port = int(binary.BigEndian.Uint16(optionBytes[offset : offset+typeLength]))
-		default:
-			// Undefined, skip over
-			log.Debug("Skipping unknown DHCP Vendor Specific Option type", "type", typeCode,
-				"length", typeLength)
-		}
-		offset += typeLength
+		ip = net.IP(ipEncap)
 	}
-	if offset != buffLen {
-		log.Debug("Stray data after last field, ignored.", "offset", offset,
-			"buffLen", buffLen)
+	field = vendorData.Get(typePort)
+	if field != nil && len(field) != 0 {
+		// Port field
+		if len(field) != 2 {
+			err = fmt.Errorf("port parse error: wrong length: %d byte(s)", len(field))
+			return
+		}
+		port = int(binary.BigEndian.Uint16(field))
+	}
+	if ip == nil || !ip.IsGlobalUnicast() && !ip.IsLinkLocalUnicast() && !ip.IsLoopback() && !ip.IsPrivate() {
+		err = fmt.Errorf("invalid IPv4 address type: %s", ip)
+		ip = nil
+		return
 	}
 	return
 }
