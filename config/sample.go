@@ -19,7 +19,7 @@ const bootstrapperSample = `
 sciond_config_dir = "."
 
 # Set the verification behavior of the signature of the configuration file using the TRC (default permissive)
-security_mode = insecure
+security_mode = "insecure"
 
 # Discovery mechanisms
 [mock]
@@ -31,6 +31,19 @@ security_mode = insecure
 [dhcp]
 	# Whether to enable DHCP discovery or not (default false)
 	enable = false
+[dhcpv6]
+    # Whether to enable DHCPv6 discovery or not (default false)
+    enable = false
+    # Set the DHCPv6 Unique Identifier type (default "DUID-LLT")
+    DUID_type = "DUID-LL"
+    # Set a static, fixed DUID
+    # Overrides the DUID_type setting, to be used for setting DUID-EN, DUID-UUID or debugging
+    # Fixed hex string for the client DUID, no separators, no 0x prefix:
+    #client_id = "0001000100000000deadbeefaabb"
+[ipv6]
+    # Whether to enable IPv6 Neighbor Discovery Protocol (NDP)
+    # Router Advertisement DNSSL and RDNS discovery or not (default false)
+    enable = false
 [dnssd]
 	# Whether to enable DNS SRV discovery or not (default false)
 	enable_srv = true
