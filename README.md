@@ -6,6 +6,8 @@ of the **discovery server** serving the actual configuration files over HTTP.
 
 It uses the following hinting mechanisms:
 - DHCP option `www-server` and `Vendor-Identifying Vendor Option` [RFC2132],[RFC3925]
+- DHCPv6 `Vendor-specific Information Option` [RFC3315]
+- IPv6 NDP: DNS resolver and DNS Search List [RFC6106]
 - DNS-SRV: DNS service resource records [RFC2782]
 - DNS-SD: DNS service discovery [RFC6763]
 - mDNS: multicast DNS [RFC6762]
@@ -37,9 +39,20 @@ adding the following line to `/etc/dnsmasq.conf`: `dhcp-option=72,<webserverIP>`
 Note that `dnsmasq` does not support DHCP option 72 `www-server` by default,
 `https://thekelleys.org.uk/dnsmasq/docs/dnsmasq-man.html`, supported DHCP options are registered in `dhcp-common.c`.
 `dhcpd` supports the option by default, `https://github.com/koenning/isc-dhcpd/blob/master/common/tables.c`.
-Make sure to disable the options you don't need, by default `dnsmasq` is enabled to reply to DNS queries,
+Make sure to disable the options you don't need: By default `dnsmasq` is enabled to reply to DNS queries,
 but it also has an integrated DHCP server that can be enabled for only specific interfaces or all interfaces.
 Make sure to also check how `dnsmasq` interacts with the `resolvconf package` and your local network DHCP setup.
+
+### DHCPv6 (dnsmasq)
+
+DHCPv6 Option 17, Vendor-specific Information Option, is supported for discovery in IPv6 networks.
+Note that the option code and length field width are different from DHCPv4.
+
+### IPv6 NDP (dnsmasq)
+
+IPv6 Neighbor Discovery Protocol Router Advertisements can be used to advertise DNS resolvers and DNS Search
+Lists to be used in the DNS based discovery mechanisms.
+Can be used in combination with DHCPv6, SLAAC or static address configuration.
 
 ### mDNS (avahi)
 
