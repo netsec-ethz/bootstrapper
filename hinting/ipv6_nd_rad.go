@@ -106,8 +106,8 @@ func (g *IPv6HintGenerator) createRouterSolicitation() (rs ndp.RouterSolicitatio
 }
 
 func (g *IPv6HintGenerator) dispatchDNSInfo(resolvers []netip.Addr, searchDomains []string, dnsChan chan<- DNSInfo) {
-	log.Debug("DHCP DNS resolver option", "resolvers", resolvers)
-	log.Debug("DHCP DNS search domain option", "searchDomains", searchDomains)
+	log.Debug("RA DNS resolver option", "resolvers", resolvers)
+	log.Debug("RA DNS search domain option", "searchDomains", searchDomains)
 	dnsInfo := DNSInfo{resolvers: []string{}, searchDomains: []string{}}
 	for _, r := range resolvers {
 		dnsInfo.resolvers = append(dnsInfo.resolvers, r.String())
@@ -155,7 +155,7 @@ func (g *IPv6HintGenerator) sendReceiveLoopRA() (ndp.Message, error) {
 	dst := netip.MustParseAddr("ff02::2") // Multicast all routers in the link-local
 
 	for i := 0; ; i++ {
-		msg, _, err := sendReceive(context.TODO(), c, &rs, dst, raFilter)
+		msg, _, err := sendReceiveRA(context.TODO(), c, &rs, dst, raFilter)
 		switch err {
 		case context.Canceled:
 			return nil, err
@@ -171,7 +171,7 @@ func (g *IPv6HintGenerator) sendReceiveLoopRA() (ndp.Message, error) {
 
 var errRetry = errors.New("retry")
 
-func sendReceive(
+func sendReceiveRA(
 	ctx context.Context,
 	c *ndp.Conn,
 	m ndp.Message,
