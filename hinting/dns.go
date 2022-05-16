@@ -126,7 +126,7 @@ func resolveDNS(resolver, query string, resultPort uint16, dnsRR uint16, ipHints
 			result := *(answer.(*dns.SRV))
 			serviceRecords = append(serviceRecords, result)
 		case *dns.A:
-			result := *(answer.(*dns.A))
+			result :=*(answer.(*dns.A))
 			addr := net.TCPAddr{IP: result.A, Port: int(resultPort)}
 			log.Info("DNS hint", "Addr", addr)
 			ipHintsChan <- addr
@@ -169,7 +169,7 @@ func resolveDNS(resolver, query string, resultPort uint16, dnsRR uint16, ipHints
 func queryTXTPortRecord(resolver, query string) (resultPort uint16) {
 	msg := new(dns.Msg)
 	msg.SetQuestion(query, dns.TypeTXT)
-	msg.RecursionDesired = false
+	msg.RecursionDesired = true
 	res, err := dns.Exchange(msg, resolver+":53")
 	if err != nil {
 		log.Error("DNS-SD failed to resolve TXT record for S-NAPTR", "err", err)
