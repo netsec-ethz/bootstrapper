@@ -110,7 +110,7 @@ func getDuid(g *DHCPv6HintGenerator) (duid dhcpv6.Duid, err error) {
 		}
 	case duidEN, duidUUID:
 		// Not implemented
-		log.Error("Unsupported DUID type %s, set DUID directly as `client_id` " +
+		log.Error("Unsupported DUID type %s, set DUID directly as `client_id` "+
 			"or use the supported `DUID-LL` and `DUID-LLT`types.", "type", g.cfg.Duid)
 		err = fmt.Errorf("not implemented DUID type: %s", g.cfg.Duid)
 	default:
@@ -143,27 +143,24 @@ func (g *DHCPv6HintGenerator) dispatchIPHints(conv []dhcpv6.DHCPv6, ipHintChan c
 	}
 }
 
-func (g *DHCPv6HintGenerator) dispatchDNSInfo(conv []dhcpv6.DHCPv6, dnsChan chan<- DNSInfo) {
+func (g *DHCPv6HintGenerator) dispatchDNSInfo(conversation []dhcpv6.DHCPv6, dnsChan chan<- DNSInfo) {
 	resolvers := make(map[netip.Addr]struct{})
 	searchDomains := make(map[string]struct{})
-	for _, p := range conv {
-		options := p.GetOption(dhcpv6.OptionDNSRecursiveNameServer)
-		for _, option := range options {
-			if oRDNS, ok := option.(*dhcpv6.OptDNSRecursiveNameServer); ok {
-				for _, resolver := range oRDNS.NameServers {
-					if resolver, ok := netip.AddrFromSlice(resolver); ok {
-						resolvers[resolver] = struct{}{}
-					}
-				}
+	for _, packet := range conversation {
+		messageOptions := dhcpv6.MessageOptions{Options: packet.GetOption(dhcpv6.OptionDNSRecursiveNameServer)}
+		for _, resolver := range messageOptions.DNS() {
+			if resolver, ok := netip.AddrFromSlice(resolver); ok {
+				resolvers[resolver] = struct{}{}
 			}
 		}
-		options = p.GetOption(dhcpv6.OptionDomainSearchList)
-		for _, option := range options {
-			if oDNSSL, ok := option.(*dhcpv6.OptDomainSearchList); ok {
-				for _, searchDomain := range oDNSSL.DomainSearchList.Labels {
-					searchDomains[searchDomain] = struct{}{}
-				}
-			}
+
+		messageOptions = dhcpv6.MessageOptions{Options: packet.GetOption(dhcpv6.OptionDomainSearchList)}
+		domains := messageOptions.DomainSearchList()
+		if domains == nil {
+			continue
+		}
+		for _, searchDomain := range domains.Labels {
+			searchDomains[searchDomain] = struct{}{}
 		}
 	}
 	if len(resolvers) < 1 {
