@@ -99,10 +99,30 @@ func (g *IPv6HintGenerator) createRouterSolicitation() (rs ndp.RouterSolicitatio
 	}
 
 	rafilter = func(m ndp.Message) bool {
-		_, ok := m.(*ndp.RouterAdvertisement)
-		return ok
+		ra, ok := m.(*ndp.RouterAdvertisement)
+		if !ok {
+			return ok
+		}
+		return hasDNSOptions(ra.Options)
 	}
 	return
+}
+
+func hasDNSOptions(opts []ndp.Option) bool {
+	hasRDNS := false
+	hasDNSSL := false
+	for _, o := range opts {
+		if _, ok := o.(*ndp.RecursiveDNSServer); ok {
+			hasRDNS = true
+		}
+		if _, ok := o.(*ndp.DNSSearchList); ok {
+			hasDNSSL = true
+		}
+		if hasRDNS && hasDNSSL {
+			break
+		}
+	}
+	return hasRDNS && hasDNSSL
 }
 
 func (g *IPv6HintGenerator) dispatchDNSInfo(resolvers []netip.Addr, searchDomains []string, dnsChan chan<- DNSInfo) {
