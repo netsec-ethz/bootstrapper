@@ -25,7 +25,7 @@ import (
 
 const (
 	DiscoveryPort  uint16 = 8041
-	DNSInfoTimeout        = 5 * time.Second
+	DNSInfoTimeout        = 10 * time.Second
 )
 
 var (

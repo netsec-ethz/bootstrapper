@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	hintsTimeout = 10 * time.Second
+	hintsTimeout = 15 * time.Second
 )
 
 type Bootstrapper struct {
