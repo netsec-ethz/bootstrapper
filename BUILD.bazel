@@ -1,7 +1,7 @@
 load("@bazel_gazelle//:def.bzl", "gazelle")
 load("@rules_pkg//:pkg.bzl", "pkg_deb", "pkg_tar")
 load("@rules_pkg//:rpm.bzl", "pkg_rpm")
-load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
 load("@io_bazel_rules_go//go:def.bzl", "nogo")
 
 # gazelle:prefix github.com/netsec-ethz/bootstrapper
@@ -9,10 +9,10 @@ gazelle(name = "gazelle")
 
 go_binary(
     name = "bootstrapper",
+    out = "bootstrapper",
     embed = [":go_default_library"],
     visibility = ["//visibility:public"],
     x_defs = {"github.com/netsec-ethz/bootstrapper/config.versionString": "{STABLE_PKG_VERSION_SCION_BOOTSTRAPPER}"},
-    out = "bootstrapper",
 )
 
 go_library(
@@ -25,9 +25,8 @@ go_library(
     visibility = ["//visibility:private"],
     deps = [
         "//config:go_default_library",
-        "//hinting:go_default_library",
         "//fetcher:go_default_library",
-        "@org_golang_x_net//context/ctxhttp:go_default_library",
+        "//hinting:go_default_library",
         "@com_github_inconshreveable_log15//:go_default_library",
     ],
 )
@@ -74,25 +73,34 @@ pkg_tar(
     extension = "tar.gz",
     deps = [
         ":scion-bootstrapper-bin",
-        ":scion-bootstrapper-systemd",
         ":scion-bootstrapper-config",
         ":scion-bootstrapper-dhcp-hook",
+        ":scion-bootstrapper-systemd",
     ],
 )
 
 # Package information
 PKG_DESCRIPTION = "SCION Endhost Bootstrapper"
+
 PKG_HOMEPAGE = "https://www.scion-architecture.net"
+
 PKG_MAINTAINER = "ETH Zurich, SCIONLab Team <scionlab-admins@sympa.ethz.ch>"
+
 # Add package defaults
 ENV_PKG_ARCHITECTURE = ""
+
 PKG_ARCHITECTURE = "amd64" if ENV_PKG_ARCHITECTURE == "" else ENV_PKG_ARCHITECTURE
+
 ENV_PKG_VERSION = ""
+
 PKG_VERSION = "0.0.0" if ENV_PKG_VERSION == "" else ENV_PKG_VERSION
 
 pkg_deb(
     name = "scion-bootstrapper-deb",
     architecture = PKG_ARCHITECTURE,
+    conffiles = [
+        "/etc/scion/bootstrapper.toml",
+    ],
     data = ":scion-bootstrapper",
     depends = [
         "scion-dispatcher",
@@ -108,9 +116,6 @@ pkg_deb(
     priority = "optional",
     section = "net",
     version = PKG_VERSION,
-    conffiles = [
-        "/etc/scion/bootstrapper.toml",
-    ],
 )
 
 # RHEL rpm
@@ -120,9 +125,9 @@ pkg_rpm(
     data = [
         ":scion-bootstrapper",
     ],
+    release = "1",
     spec_file = "res/packaging/rhel/scion-bootstrapper.spec",
     version = PKG_VERSION,
-    release = "1",
 )
 
 # Nogo - Go code analysis tool
@@ -155,4 +160,3 @@ nogo(
         "@org_golang_x_tools//go/analysis/passes/unusedresult:go_tool_library",
     ],
 )
-
