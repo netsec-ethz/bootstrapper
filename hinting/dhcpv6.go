@@ -217,20 +217,17 @@ func parseBootstrapVendorInformationOption(vsio dhcpv6.OptVendorOpts) (ip netip.
 	//   +-----+-----+-----+-----+-----+-----+---
 	//
 
-	// Anapaya Systems Private Enterprise Number
-	const AnapayaPEN = 55324
-	type typeCode uint16
 	const (
-		typePort typeCode = iota + 2
+		typePort dhcpv6.OptionCode = iota + 2
 		typeIPv6
 	)
 
-	if vsio.EnterpriseNumber != AnapayaPEN {
+	if vsio.EnterpriseNumber != anapayaPEN {
 		err = fmt.Errorf("unexpected Vendor-ID, PEN:%d", vsio.EnterpriseNumber)
 		return
 	}
 	for _, field := range vsio.VendorOpts {
-		switch typeCode(field.Code()) {
+		switch field.Code() {
 		case typeIPv6:
 			var ok bool
 			ip, ok = netip.AddrFromSlice(field.ToBytes())

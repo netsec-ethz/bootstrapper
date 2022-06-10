@@ -130,6 +130,16 @@ func (g *DHCPHintGenerator) dispatchDNSInfo(ack *dhcpv4.DHCPv4, dnsChan chan<- D
 	dnsInfoWriters.Done()
 }
 
+type typeCode uint8
+
+func (t typeCode) Code() uint8 {
+	return uint8(t)
+}
+
+func (t typeCode) String() string {
+	return fmt.Sprint(t.Code())
+}
+
 func parseBootstrapVendorOption(optionBytes []byte) (ip net.IP, port int, err error) {
 	// Parses a Vendor-Identifying Vendor Option for DHCPv4 as defined in RFC3925.
 	// `optionsBytes` should only contains the option's values byte stream, starting with the PEN,
@@ -162,9 +172,6 @@ func parseBootstrapVendorOption(optionBytes []byte) (ip net.IP, port int, err er
 	//   +-----+-----+-----+-----+---
 	//
 
-	// Anapaya Systems Private Enterprise Number
-	const AnapayaPEN = 55324
-	type typeCode uint8
 	const (
 		typeIPv4 typeCode = iota + 1
 		typePort
@@ -178,7 +185,7 @@ func parseBootstrapVendorOption(optionBytes []byte) (ip net.IP, port int, err er
 	}
 	PEN := binary.BigEndian.Uint32(optionBytes[offset : offset+4])
 	offset += 4
-	if int(PEN) != AnapayaPEN {
+	if int(PEN) != anapayaPEN {
 		err = fmt.Errorf("unexpected Vendor-ID, PEN:%d", PEN)
 		return
 	}
@@ -220,6 +227,7 @@ func parseBootstrapVendorOption(optionBytes []byte) (ip net.IP, port int, err er
 		}
 		port = int(binary.BigEndian.Uint16(field))
 	}
+	// Check that we have a valid unicast IPv4 address and not just any 4 bytes, excludes IsUnspecified and IsMulticast
 	if ip == nil || !ip.IsGlobalUnicast() && !ip.IsLinkLocalUnicast() && !ip.IsLoopback() && !ip.IsPrivate() {
 		err = fmt.Errorf("invalid IPv4 address type: %s", ip)
 		ip = nil

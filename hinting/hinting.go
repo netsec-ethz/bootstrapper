@@ -24,6 +24,7 @@ import (
 )
 
 const (
+	anapayaPEN = 55324 // Anapaya Systems Private Enterprise Number
 	DiscoveryPort  uint16 = 8041
 	DNSInfoTimeout        = 10 * time.Second
 )
