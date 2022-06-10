@@ -145,7 +145,10 @@ func (g *IPv6HintGenerator) dispatchDNSInfo(resolvers []netip.Addr, searchDomain
 	dnsInfoWriters.Done()
 }
 
+// TODO: simplify further or rewrite after additional testing
+
 // Adapted from https://github.com/mdlayher/ndp/
+// https://github.com/mdlayher/ndp/blob/3c95c205b9a485f6eeb29632df4c89504a2353dc/internal/ndpcmd/transfer.go
 //
 // MIT License
 //
