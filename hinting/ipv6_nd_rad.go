@@ -163,6 +163,8 @@ func (g *IPv6HintGenerator) dispatchDNSInfo(resolvers []netip.Addr, searchDomain
 // OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 func (g *IPv6HintGenerator) sendReceiveLoopRA() (ndp.Message, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), DNSInfoTimeout)
+	defer cancel()
 	rs, raFilter, err := g.createRouterSolicitation()
 	if err != nil {
 		return nil, fmt.Errorf("error creating IPv6 Router Solicitation: %w", err)
@@ -174,8 +176,8 @@ func (g *IPv6HintGenerator) sendReceiveLoopRA() (ndp.Message, error) {
 	}
 	dst := netip.MustParseAddr("ff02::2") // Multicast all routers in the link-local
 
-	for i := 0; ; i++ {
-		msg, _, err := sendReceiveRA(context.TODO(), c, &rs, dst, raFilter)
+	for {
+		msg, _, err := sendReceiveRA(ctx, c, &rs, dst, raFilter)
 		switch err {
 		case context.Canceled:
 			return nil, err

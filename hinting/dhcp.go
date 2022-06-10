@@ -130,16 +130,6 @@ func (g *DHCPHintGenerator) dispatchDNSInfo(ack *dhcpv4.DHCPv4, dnsChan chan<- D
 	dnsInfoWriters.Done()
 }
 
-type typeCode uint8
-
-func (t typeCode) Code() uint8 {
-	return uint8(t)
-}
-
-func (t typeCode) String() string {
-	return t.String()
-}
-
 func parseBootstrapVendorOption(optionBytes []byte) (ip net.IP, port int, err error) {
 	// Parses a Vendor-Identifying Vendor Option for DHCPv4 as defined in RFC3925.
 	// `optionsBytes` should only contains the option's values byte stream, starting with the PEN,
@@ -174,6 +164,7 @@ func parseBootstrapVendorOption(optionBytes []byte) (ip net.IP, port int, err er
 
 	// Anapaya Systems Private Enterprise Number
 	const AnapayaPEN = 55324
+	type typeCode uint8
 	const (
 		typeIPv4 typeCode = iota + 1
 		typePort
