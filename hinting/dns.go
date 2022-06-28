@@ -119,9 +119,6 @@ func resolveDNS(resolver, query string, resultPort uint16, dnsRR uint16, ipHints
 			result := *(answer.(*dns.NAPTR))
 			if result.Service == discoveryDDDSDNSName {
 				naptrRecords = append(naptrRecords, result)
-				if resultPort == 0 {
-					resultPort = queryTXTPortRecord(resolver, query)
-				}
 			}
 		case *dns.SRV:
 			result := *(answer.(*dns.SRV))
@@ -158,6 +155,9 @@ func resolveDNS(resolver, query string, resultPort uint16, dnsRR uint16, ipHints
 			case "":
 				resolveDNS(resolver, answer.Replacement, resultPort, dns.TypeNAPTR, ipHintsChan)
 			case "A":
+				if resultPort == 0 {
+					resultPort = queryTXTPortRecord(resolver, query)
+				}
 				resolveDNS(resolver, answer.Replacement, resultPort, dns.TypeAAAA, ipHintsChan)
 				resolveDNS(resolver, answer.Replacement, resultPort, dns.TypeA, ipHintsChan)
 			case "S":
