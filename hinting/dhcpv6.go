@@ -57,6 +57,12 @@ func (g *DHCPv6HintGenerator) Generate(ipHintsChan chan<- net.TCPAddr) {
 	if !g.cfg.Enable {
 		return
 	}
+	if !HasIPv6(g.iface) {
+		// Do not query for IPv6 information on interfaces that do not already have an IPv6 address configured
+		log.Info(fmt.Sprintf("No DHCPv6 probing performed, interface has no IPv6 address"),
+			"interface", g.iface.Name)
+		return
+	}
 	log.Info("DHCPv6 Probing", "interface", g.iface.Name)
 	client := client6.NewClient()
 	// request vendor options

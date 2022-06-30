@@ -24,6 +24,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/inconshreveable/log15"
 	"github.com/pelletier/go-toml"
@@ -53,7 +54,7 @@ var (
 )
 
 type Config struct {
-	InterfaceName   string
+	InterfaceName   string                          `toml:"iface,omitempty"`
 	SciondConfigDir string                          `toml:"sciond_config_dir"`
 	SecurityMode    SecurityMode                    `toml:"security_mode,omitempty"`
 	MOCK            hinting.MOCKHintGeneratorConf   `toml:"mock"`
@@ -134,23 +135,47 @@ func (cfg *Config) InitDefaults() {
 	if cfg.SecurityMode == "" {
 		cfg.SecurityMode = Permissive
 	}
+	if cfg.InterfaceName == "" && (cfg.DHCPv6.Enable || cfg.IPv6.Enable || cfg.DHCP.Enable || cfg.MDNS.Enable) {
+		log15.Warn("iface flag not set, recommended when IPv6, DHCP or mDNS hinting is enabled")
+		iface, err := getDefaultInterface()
+		if err != nil {
+			log15.Error(err.Error())
+		} else {
+			cfg.InterfaceName = iface.Name
+			log15.Info("Using default primary interface for requests",
+				"interface", cfg.InterfaceName)
+		}
+	}
+}
+
+func getDefaultInterface() (net.Interface, error) {
+	if ifaces, err := net.Interfaces(); err == nil {
+		sort.Slice(ifaces, func(i, j int) bool { return ifaces[i].Index < ifaces[j].Index })
+		for _, iface := range ifaces {
+			if (iface.Flags & net.FlagLoopback) != 0 {
+				continue
+			}
+			if (iface.Flags&net.FlagUp) != 0 && (iface.Flags&net.FlagBroadcast) != 0 {
+				return iface, nil
+			}
+		}
+	}
+	return net.Interface{}, fmt.Errorf("no active external broadcast interface found")
 }
 
 func (cfg *Config) Validate() error {
-	// Validate iface
-	if cfg.DHCP.Enable || cfg.MDNS.Enable {
-		if cfg.InterfaceName == "" {
-			return fmt.Errorf("iface flag not set, required when DHCP or mDNS hinting enabled")
-		}
-		_, err := net.InterfaceByName(cfg.InterfaceName)
-		if err != nil {
-			return fmt.Errorf("valid interface value required when DHCP or mDNS hinting enabled: %w", err)
-		}
-	}
 	// Validate log level
 	_, err := log15.LvlFromString(cfg.Logging.Console.Level)
 	if err != nil {
 		return fmt.Errorf("unknown log level %s\n", cfg.Logging.Console.Level)
+	}
+
+	// Validate iface
+	if cfg.DHCPv6.Enable || cfg.IPv6.Enable || cfg.DHCP.Enable || cfg.MDNS.Enable {
+		_, err := net.InterfaceByName(cfg.InterfaceName)
+		if err != nil {
+			return fmt.Errorf("valid interface value required when IPv6, DHCP or mDNS hinting enabled: %w", err)
+		}
 	}
 	return nil
 }

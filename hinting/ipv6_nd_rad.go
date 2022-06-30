@@ -48,6 +48,12 @@ func (g *IPv6HintGenerator) Generate(ipHintsChan chan<- net.TCPAddr) {
 	if !g.cfg.Enable {
 		return
 	}
+	if !HasIPv6(g.iface) {
+		// Do not perform NDP on interfaces that do not already have an IPv6 address configured
+		log.Info(fmt.Sprintf("No IPv6 probing performed, interface has no IPv6 address"),
+			"interface", g.iface.Name)
+		return
+	}
 	log.Info("IPv6 Probing", "interface", g.iface.Name)
 
 	resp, err := g.sendReceiveLoopRA()

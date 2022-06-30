@@ -43,6 +43,10 @@ func realMain() int {
 		_, _ = fmt.Fprintf(os.Stderr, "Unable to load config: %v\n", err)
 		return 1
 	}
+	if config.IfaceName != "" {
+		// override config file setting with command line flag value
+		cfg.InterfaceName = config.IfaceName
+	}
 	cfg.InitDefaults()
 	lvl, err := log.LvlFromString(cfg.Logging.Console.Level)
 	if err != nil {
@@ -50,8 +54,6 @@ func realMain() int {
 		return 1
 	}
 	log.Root().SetHandler(log.LvlFilterHandler(lvl, log.StreamHandler(os.Stdout, log.LogfmtFormat())))
-
-	cfg.InterfaceName = config.IfaceName
 
 	if err := cfg.Validate(); err != nil {
 		log.Error("Unable to validate config", "err", err)

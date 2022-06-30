@@ -16,6 +16,7 @@ package hinting
 
 import (
 	"net"
+	"net/netip"
 	"runtime"
 	"sync"
 	"time"
@@ -202,4 +203,30 @@ func (m *MockHintGenerator) Generate(ipHintsChan chan<- net.TCPAddr) {
 		return
 	}
 	ipHintsChan <- *tcpAddr
+}
+
+
+func HasIPv6(iface *net.Interface) bool {
+	return len(ifaceIPv6Addrs(iface)) > 0
+}
+
+func ifaceIPv6Addrs(iface *net.Interface) (ips []netip.Addr) {
+	if iface == nil {
+		return
+	}
+	ifaddrs, err := iface.Addrs()
+	if err != nil {
+		return
+	}
+	for _, ifaddr := range ifaddrs {
+		ifaddr, ok := ifaddr.(*net.IPNet)
+		if !ok {
+			continue
+		}
+		ip, ok := netip.AddrFromSlice(ifaddr.IP)
+		if ok && ip.Is6() && !ip.Is4In6() {
+			ips = append(ips, ip)
+		}
+	}
+	return
 }

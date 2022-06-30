@@ -68,14 +68,12 @@ func NewBootstrapper(cfg *config.Config) (*Bootstrapper, error) {
 
 func (b *Bootstrapper) tryBootstrapping() error {
 	var hintGenerators []hinting.HintGenerator
-	ipv6Addrs := ifaceIPv6Addrs(b.iface)
-	if len(ipv6Addrs) > 0 {
-		hintGenerators = append(hintGenerators, hinting.NewDHCPv6HintGenerator(&cfg.DHCPv6, b.iface))
-		// Get DNS information from IPv6 RAs
-		hintGenerators = append(hintGenerators, hinting.NewIPv6HintGenerator(&cfg.IPv6, b.iface))
-	}
+	lacksIPv6Support := !hasIPv6Support()
 	hintGenerators = append(hintGenerators,
 		hinting.NewMockHintGenerator(&cfg.MOCK),
+		// Gets DNS information from IPv6 RAs
+		hinting.NewIPv6HintGenerator(&cfg.IPv6, b.iface),
+		hinting.NewDHCPv6HintGenerator(&cfg.DHCPv6, b.iface),
 		hinting.NewDHCPHintGenerator(&cfg.DHCP, b.iface),
 		// XXX: DNS-SD depends on DNS resolution working, which can depend on DHCP for getting the local DNS resolver IP
 		hinting.NewDNSSDHintGenerator(&cfg.DNSSD),
@@ -100,6 +98,12 @@ OuterLoop:
 	for {
 		select {
 		case ipAddr := <-b.ipHintsChan:
+			if ip, ok := netip.AddrFromSlice(ipAddr.IP); ok {
+				if ip.Is6() && lacksIPv6Support {
+					// Device does not have an IPv6 address, ignore IPv6 hints
+					continue
+				}
+			}
 			serverAddr := &ipAddr
 			if serverAddr.Port == 0 {
 				serverAddr.Port = int(hinting.DiscoveryPort)
@@ -119,20 +123,15 @@ OuterLoop:
 	return nil
 }
 
-func ifaceIPv6Addrs(iface *net.Interface) (ips []netip.Addr) {
-	ifaddrs, err := iface.Addrs()
+func hasIPv6Support() bool {
+	ifaces, err := net.Interfaces()
 	if err != nil {
-		return
+		return false
 	}
-	for _, ifaddr := range ifaddrs {
-		ifaddr, ok := ifaddr.(*net.IPNet)
-		if !ok {
-			continue
-		}
-		ip, ok := netip.AddrFromSlice(ifaddr.IP)
-		if ok && ip.Is6() && !ip.Is4In6() {
-			ips = append(ips, ip)
+	for _, iface := range ifaces {
+		if hinting.HasIPv6(&iface) {
+			return true
 		}
 	}
-	return
+	return false
 }
