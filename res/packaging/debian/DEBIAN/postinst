@@ -37,6 +37,9 @@ case "$1" in
         if [ ! -f /.dockerenv ]; then
             systemctl enable --now scion-bootstrapper@$iface.service > /dev/null 2>&1
             systemctl restart --now scion-daemon.service > /dev/null 2>&1
+        else
+            # In a docker environment, run directly
+            /usr/bin/bootstrapper -iface $iface -config /etc/scion/bootstrapper.toml
         fi
         exit 0
         ;;
