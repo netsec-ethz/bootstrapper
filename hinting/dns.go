@@ -29,6 +29,7 @@ import (
 const (
 	discoveryServiceDNSName string = "_sciondiscovery._tcp"
 	discoveryDDDSDNSName    string = "x-sciondiscovery:tcp"
+	discoveryDDDSDNSTag     string = "x-sciondiscovery"
 )
 
 type DNSInfo struct {
@@ -178,8 +179,7 @@ func queryTXTPortRecord(resolver, query string) (resultPort uint16) {
 	for _, ans := range res.Answer {
 		if txtRecords, ok := ans.(*dns.TXT); ok {
 			for _, txt := range txtRecords.Txt {
-				tag := strings.Split(discoveryDDDSDNSName, ":")[0] + "="
-				if !strings.HasPrefix(txt, tag) {
+				if !strings.HasPrefix(txt, discoveryDDDSDNSTag) {
 					continue
 				}
 				txt = strings.Split(txt, "=")[1]
