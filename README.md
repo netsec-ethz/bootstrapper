@@ -32,7 +32,8 @@ You can then build the package by running `bazel build //:scion-bootstrapper-deb
 When contributing, please run `make all` in order to make sure that all targets build and to run the linter.
 
 Experimental availability is also provided for macOS and Windows. Run `make darwin` or `make windows` to build a
-Mach-O or PE32+ binary respectively.\
+Mach-O or PE32+ binary respectively.
+
 ---
 **NOTE**
 
