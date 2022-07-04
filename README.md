@@ -9,12 +9,18 @@ It uses the following hinting mechanisms:
 - DHCPv6 `Vendor-specific Information Option` [RFC3315]
 - IPv6 NDP: DNS resolver and DNS Search List [RFC6106]
 - DNS-SRV: DNS service resource records [RFC2782]
+- DNS-NAPTR: Naming Authority Pointer DNS Resource Record [RFC2915]
 - DNS-SD: DNS service discovery [RFC6763]
 - mDNS: multicast DNS [RFC6762]
 
 It integrates with SCION by using the same OpenAPI as the control service uses
 for exposing TRCs (serving as root certificate) and the topology file
 (describing the local SCION topology).
+
+## Installing
+
+Install from the netsec package repository at `https://packages.netsec.inf.ethz.ch/debian`:
+`sudo apt-get install scion-bootstrapper`
 
 ## Building
 
@@ -24,6 +30,33 @@ The service files are in the `./res/packaging/debian/` directory.
 You can install Bazel by following the instructions at https://docs.bazel.build/versions/master/install-ubuntu.html
 You can then build the package by running `bazel build //:scion-bootstrapper-deb`.
 When contributing, please run `make all` in order to make sure that all targets build and to run the linter.
+
+Experimental availability is also provided for macOS and Windows. Run `make darwin` or `make windows` to build a
+Mach-O or PE32+ binary respectively.\
+---
+**NOTE**
+
+On macOS, you might need to remove the IPv6 address(es) from your network interface if IPv6 connectivity is broken.
+You can do so with the following command: `sudo networksetup -setv6off Ethernet`
+ (use the flag `-setv6automatic` to reenable).\
+On Windows, you might need to run the bootstrapper via the Command Prompt (cmd) instead of the PowerShell prompt.
+Symlinking the output directory on shares or as unprivileged user is also not supported.
+You can check your connection specific DNS suffix with `ipconfig` or
+ in the advanced DNS settings of the adapter properties.
+
+You might also need to explicitly allow the connections in your firewall, in particular for the broadcast based hinting
+mechanisms.
+
+---
+
+## Running
+
+The package starts the bootstrapper service at installation and adds a client hook to detect connectivity changes.\
+It can be manually restarted with `sudo systemctl restart 'scion-bootstrapper@*.service'`
+
+### Manual configuration
+Generate a default configuration with `./scion-bootstrapper -help-config > ./bootstrapper.yml`.\
+Run it with `./scion-bootstrapper -config bootstrapper.yml`.
 
 ## Client bootstrap service configuration
 

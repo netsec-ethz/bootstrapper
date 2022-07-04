@@ -224,7 +224,8 @@ func ifaceIPv6Addrs(iface *net.Interface) (ips []netip.Addr) {
 			continue
 		}
 		ip, ok := netip.AddrFromSlice(ifaddr.IP)
-		if ok && ip.Is6() && !ip.Is4In6() {
+		// do not include IPv6 mapped IPv4 addresses and IPv6 loopback
+		if ok && ip.Is6() && !ip.Is4In6() && !ip.IsLoopback(){
 			ips = append(ips, ip)
 		}
 	}

@@ -138,6 +138,17 @@ func PullTRCs(outputPath, workingDir string, addr *net.TCPAddr, securityMode con
 	if err != nil {
 		return fmt.Errorf("unable to parse TRCs listing from JSON bytes: %w", err)
 	}
+	certDir := filepath.Join(outputPath, "certs")
+	if _, serr := os.Stat(certDir); os.IsNotExist(serr) {
+		log.Warn("Missing certs directory from sciond package, "+
+			"running non-standard installation?", "err", serr)
+		err := os.Mkdir(certDir, 0775)
+		if err != nil {
+			log.Error("Unable to stat or create output directory for TRCs", "serr", serr, "err", err)
+			return err
+		}
+		log.Info("Created certs directory in output path", "certDir", certDir)
+	}
 
 	if securityMode != config.Insecure {
 		// Wipe symlinks to TRCs fetched in insecure mode, if we are not using the insecure mode
