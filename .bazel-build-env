@@ -1,6 +1,8 @@
 #!/bin/bash
+sed -i "s/^ENV_PKG_ARCHITECTURE = \".*\"$/ENV_PKG_ARCHITECTURE = \"${PKG_ARCHITECTURE}\"/" BUILD.bazel &>/dev/null
 # override defaults with values from CI environment
-sed -i "s/^ENV_PKG_ARCHITECTURE = .*/ENV_PKG_ARCHITECTURE = \"${CI_TARGET_ARCHITECTURE}\"/" BUILD.bazel &>/dev/null
+sed -i "s/^CI_TARGET_ARCHITECTURE = .*/CI_TARGET_ARCHITECTURE = \"${CI_TARGET_ARCHITECTURE}\"/" BUILD.bazel &>/dev/null
+sed -i "s/^CI_GOARCH = .*/CI_GOARCH = \"${CI_GOARCH}\"/" BUILD.bazel &>/dev/null
 sed -i "s/^ENV_PKG_VERSION = .*/ENV_PKG_VERSION = \"${PKG_VERSION_SCION_BOOTSTRAPPER}\"/" BUILD.bazel &>/dev/null
 # set executable version string
 if [ -z "${PKG_VERSION_SCION_BOOTSTRAPPER}" ]; then

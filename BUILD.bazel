@@ -7,8 +7,15 @@ load("@io_bazel_rules_go//go:def.bzl", "nogo")
 # gazelle:prefix github.com/netsec-ethz/bootstrapper
 gazelle(name = "gazelle")
 
+# Add package default architecture
+CI_GOARCH = ""
+
+GOARCH = "amd64" if CI_GOARCH == "" else CI_GOARCH
+
 go_binary(
     name = "bootstrapper",
+    goarch = GOARCH,
+    goos = "linux",
     out = "bootstrapper",
     embed = [":go_default_library"],
     visibility = ["//visibility:public"],
@@ -87,6 +94,8 @@ PKG_HOMEPAGE = "https://www.scion-architecture.net"
 PKG_MAINTAINER = "ETH Zurich, SCIONLab Team <scionlab-admins@sympa.ethz.ch>"
 
 # Add package defaults
+ENV_PKG_ARCHITECTURE = ""
+CI_TARGET_ARCHITECTURE = ""
 ENV_PKG_ARCHITECTURE = CI_TARGET_ARCHITECTURE if ENV_PKG_ARCHITECTURE == "" else ENV_PKG_ARCHITECTURE
 
 PKG_ARCHITECTURE = "amd64" if ENV_PKG_ARCHITECTURE == "" else ENV_PKG_ARCHITECTURE

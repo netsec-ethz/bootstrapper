@@ -6,8 +6,9 @@ build: bazel
 
 bazel: go_deps.bzl
 	rm -f bin/*
+	./.bazel-build-env
 	bazel build //:bootstrapper
-	cp bazel-bin/bootstrapper bin/
+	cp `bazel aquery  'outputs(".*bin/bootstrapper", //:bootstrapper)' --output=text 2>/dev/null | grep "Outputs" | sed -r 's/\s*Outputs: \[(.*)\]/\1/'` bin/
 
 all: build test package
 
