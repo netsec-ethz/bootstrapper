@@ -87,7 +87,7 @@ PKG_HOMEPAGE = "https://www.scion-architecture.net"
 PKG_MAINTAINER = "ETH Zurich, SCIONLab Team <scionlab-admins@sympa.ethz.ch>"
 
 # Add package defaults
-ENV_PKG_ARCHITECTURE = ""
+ENV_PKG_ARCHITECTURE = CI_TARGET_ARCHITECTURE if ENV_PKG_ARCHITECTURE == "" else ENV_PKG_ARCHITECTURE
 
 PKG_ARCHITECTURE = "amd64" if ENV_PKG_ARCHITECTURE == "" else ENV_PKG_ARCHITECTURE
 
