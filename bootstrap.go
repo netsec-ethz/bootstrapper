@@ -18,7 +18,6 @@ package main
 import (
 	"fmt"
 	"net"
-	"net/netip"
 	"os"
 	"sync"
 	"time"
@@ -68,7 +67,6 @@ func NewBootstrapper(cfg *config.Config) (*Bootstrapper, error) {
 
 func (b *Bootstrapper) tryBootstrapping() error {
 	var hintGenerators []hinting.HintGenerator
-	lacksIPv6Support := !hasIPv6Support()
 	hintGenerators = append(hintGenerators,
 		hinting.NewMockHintGenerator(&cfg.MOCK),
 		// Gets DNS information from IPv6 RAs
@@ -98,11 +96,10 @@ OuterLoop:
 	for {
 		select {
 		case ipAddr := <-b.ipHintsChan:
-			if ip, ok := netip.AddrFromSlice(ipAddr.IP); ok {
-				if ip.Is6() && lacksIPv6Support {
-					// Device does not have an IPv6 address, ignore IPv6 hints
-					continue
-				}
+			if err := checkIsRoutable(ipAddr.IP); err != nil {
+				// Ignore IPv6 hints if device does not have an IPv6 address, etc.
+				log.Debug("Ignore hint, no route", "hint", ipAddr, "err", err)
+				continue
 			}
 			serverAddr := &ipAddr
 			if serverAddr.Port == 0 {
@@ -123,15 +120,12 @@ OuterLoop:
 	return nil
 }
 
-func hasIPv6Support() bool {
-	ifaces, err := net.Interfaces()
+func checkIsRoutable(dst net.IP) error {
+	udpAddr := net.UDPAddr{IP: dst, Port: 1}
+	udpConn, err := net.DialUDP(udpAddr.Network(), nil, &udpAddr)
 	if err != nil {
-		return false
+		return err
 	}
-	for _, iface := range ifaces {
-		if hinting.HasIPv6(&iface) {
-			return true
-		}
-	}
-	return false
+	udpConn.Close()
+	return nil
 }
