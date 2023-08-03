@@ -204,25 +204,27 @@ func getCertsFromBundle(asCertHumanChain string) ([]*x509.Certificate, []string,
 			asCertHumanChain, len(matches))
 	}
 
-	asCertRaw := []byte(matches[0])
-	rawASCertPem, _ := pem.Decode(asCertRaw)
-	if rawASCertPem != nil {
-		asCertRaw = rawASCertPem.Bytes
+	var asCert, caCert *x509.Certificate
+	var rawCerts []string
+	for _, rawCertStr := range matches {
+		rawCert := []byte(rawCertStr)
+		rawCertPem, _ := pem.Decode(rawCert)
+		if rawCertPem != nil {
+			rawCert = rawCertPem.Bytes
+		}
+		cert, err := x509.ParseCertificate(rawCert)
+		if err != nil {
+			return nil, nil, fmt.Errorf("unable to parse certificates from detached signature: %w", err)
+		}
+		if cert.IsCA {
+			caCert = cert
+			rawCerts = append(rawCerts, rawCertStr)
+		} else {
+			asCert = cert
+			rawCerts = append([]string{rawCertStr}, rawCerts...)
+		}
 	}
-	cert, err := x509.ParseCertificate(asCertRaw)
-	if err != nil {
-		return nil, nil, fmt.Errorf("unable to parse signer certificates from signature: %w", err)
-	}
-	caCertRaw := []byte(matches[1])
-	rawCACertPem, _ := pem.Decode(caCertRaw)
-	if rawCACertPem != nil {
-		caCertRaw = rawCACertPem.Bytes
-	}
-	caCert, err := x509.ParseCertificate(caCertRaw)
-	if err != nil {
-		return nil, nil, fmt.Errorf("unable to parse signer certificates from signature: %w", err)
-	}
-	return []*x509.Certificate{cert, caCert}, matches, err
+	return []*x509.Certificate{asCert, caCert}, rawCerts, nil
 }
 
 // verifyTRCUpdateChain verifies the TRC at candidateTRCPath has a valid update chain to the other TRCs of the same ISD.
