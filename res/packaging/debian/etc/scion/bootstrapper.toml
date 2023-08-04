@@ -7,10 +7,17 @@ sciond_config_dir = "/etc/scion/"
         # This discovery mechanisms is used for testing purposes
         enable = false
         # The address to return when simulating a network discovery (default "")
-        address = "127.0.0.1"
+        address = "127.0.0.1:8041"
 [dhcp]
         # Whether to enable DHCP discovery or not (default false)
         enable = true
+[dhcpv6]
+    # Whether to enable DHCPv6 discovery or not (default false)
+    enable = true
+[ipv6]
+    # Whether to enable IPv6 Neighbor Discovery Protocol (NDP)
+    # Router Advertisement DNSSL and RDNS discovery or not (default false)
+    enable = true
 [dnssd]
         # Whether to enable DNS SRV discovery or not (default false)
         enable_srv = true
