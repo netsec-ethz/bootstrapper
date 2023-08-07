@@ -12,7 +12,7 @@ func opensslCMSVerifyOutput(ctx context.Context, signedTopology, rootCertsBundle
 		"-CAfile", rootCertsBundlePath, "-purpose", "any", "-noout", "-text", "-out", verifiedTopology).Run()
 }
 
-// opensslSMIMEPk7out uses the opnessl smime module to detach the signature on signedTopology in the PKCS#7 format.
+// opensslSMIMEPk7out uses the openssl smime module to detach the signature on signedTopology in the PKCS#7 format.
 func opensslSMIMEPk7out(ctx context.Context, signedTopology, detachedSignaturePath string) error {
 	return exec.CommandContext(ctx, "openssl", "smime", "-pk7out",
 		"-in", signedTopology, "-out", detachedSignaturePath).Run()
