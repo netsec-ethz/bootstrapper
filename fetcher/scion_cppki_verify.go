@@ -101,10 +101,9 @@ func setupVerifyEnv(workingDir string) (ctx context.Context, cancel context.Canc
 	// Signature verification should complete in a timely manner since it is a local operation
 	ctx, cancel = context.WithTimeout(context.Background(), verifyTimeout)
 
-	for _, tool := range []string{"openssl", "scion-pki"} {
-		if _, err = exec.LookPath(tool); err != nil {
-			return
-		}
+	// check 'scion-pki' tool is on path and executable
+	if err = checkBinary("scion-pki"); err != nil {
+		return
 	}
 
 	// Create verify directory
@@ -115,6 +114,11 @@ func setupVerifyEnv(workingDir string) (ctx context.Context, cancel context.Canc
 		err = fmt.Errorf("failed to create verify directory: dir: %s, err: %w", verifyPath, err)
 		return
 	}
+	return
+}
+
+func checkBinary(execName string) (err error){
+	_, err = exec.LookPath(execName)
 	return
 }
 
@@ -145,7 +149,7 @@ func verifyWithRootBundle(ctx context.Context,
 			trustAnchorTRC, err)
 	}
 	// verify the signature and certificate chain back to a root certs bundle, write out the payload:
-	if err = opensslCMSVerifyOutput(ctx, signedTopology, rootCertsBundlePath, unvalidatedTopologyPath); err != nil {
+	if err = cmsVerifyOutput(ctx, signedTopology, rootCertsBundlePath, unvalidatedTopologyPath); err != nil {
 		return fmt.Errorf("verifying and extracting signed payload failed: %w", err)
 	}
 	return
@@ -158,7 +162,7 @@ func extractSignerInfo(ctx context.Context, signedTopology, verifyPath string) (
 
 	detachedSignaturePath := filepath.Join(verifyPath, "detached_signature.p7s")
 	// detach signature for further validation:
-	err = opensslSMIMEPk7out(ctx, signedTopology, detachedSignaturePath)
+	err = smimePk7out(ctx, signedTopology, detachedSignaturePath)
 	if err != nil {
 		err = fmt.Errorf("unable to detach signature: %w", err)
 		return
@@ -166,7 +170,7 @@ func extractSignerInfo(ctx context.Context, signedTopology, verifyPath string) (
 
 	asCertHumanChain := filepath.Join(verifyPath, "as_cert_chain.human.pem")
 	// collect included certificates from detached signature:
-	err = opensslPKCS7Certs(ctx, detachedSignaturePath, asCertHumanChain)
+	err = pkcs7Certs(ctx, detachedSignaturePath, asCertHumanChain)
 	if err != nil {
 		err = fmt.Errorf("unable to gather included certificates from signature: %w", err)
 		return
