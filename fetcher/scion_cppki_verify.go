@@ -32,6 +32,8 @@ import (
 	"time"
 
 	log "github.com/inconshreveable/log15"
+
+	"github.com/netsec-ethz/bootstrapper/config"
 )
 
 const (
@@ -41,7 +43,7 @@ const (
 
 // verifyTopologySignature verifies the signature of the signed topology in workingDir
 // and stores the verified topology in outputPath.
-func verifyTopologySignature(outputPath, workingDir string) error {
+func verifyTopologySignature(cfg *config.Config) error {
 	// The signature is of the type `ecdsa-with-SHA256`:
 	// openssl cms -sign -text -in topology -out topology.signed -inkey as.key -signer as.cert.pem -certfile ca.cert.pem
 
@@ -49,19 +51,19 @@ func verifyTopologySignature(outputPath, workingDir string) error {
 	// Use the existing functionality of the `scion-pki` tool to verify a two level certificate chain
 	// consisting of (as_cert, ca_cert) back to a TRC (chain) with included root_certs.
 
-	ctx, cancel, verifyPath, err := setupVerifyEnv(workingDir)
+	ctx, cancel, verifyPath, err := setupVerifyEnv(cfg)
 	if err != nil {
 		return err
 	}
 	defer cancel()
 
-	signedTopology := filepath.Join(workingDir, signedTopologyFileName)
+	signedTopology := filepath.Join(cfg.WorkingDir(), signedTopologyFileName)
 	signerTRCid, signerIA, asCertChainPath, err := extractSignerInfo(ctx, signedTopology, verifyPath)
 	if err != nil {
 		return err
 	}
 
-	sortedTRCsPaths, err := sortedTRCsPathsByISD(outputPath, signerTRCid)
+	sortedTRCsPaths, err := sortedTRCsPathsByISD(cfg.SciondConfigDir, signerTRCid)
 	if err != nil {
 		return err
 	}
@@ -92,12 +94,12 @@ func verifyTopologySignature(outputPath, workingDir string) error {
 	if err = checkTopoIA(unvalidatedTopologyPath, signerIA); err != nil {
 		return err
 	}
-	verifiedTopology := filepath.Join(outputPath, topologyJSONFileName)
+	verifiedTopology := filepath.Join(cfg.SciondConfigDir, topologyJSONFileName)
 	err = os.Rename(unvalidatedTopologyPath, verifiedTopology)
 	return err
 }
 
-func setupVerifyEnv(workingDir string) (ctx context.Context, cancel context.CancelFunc, verifyPath string, err error) {
+func setupVerifyEnv(cfg *config.Config) (ctx context.Context, cancel context.CancelFunc, verifyPath string, err error) {
 	// Signature verification should complete in a timely manner since it is a local operation
 	ctx, cancel = context.WithTimeout(context.Background(), verifyTimeout)
 
@@ -108,7 +110,7 @@ func setupVerifyEnv(workingDir string) (ctx context.Context, cancel context.Canc
 
 	// Create verify directory
 	timestamp := time.Now().Unix()
-	verifyPath = filepath.Join(workingDir, fmt.Sprintf("verify-%d", timestamp))
+	verifyPath = filepath.Join(cfg.WorkingDir(), fmt.Sprintf("verify-%d", timestamp))
 	err = os.Mkdir(verifyPath, 0775)
 	if err != nil {
 		err = fmt.Errorf("failed to create verify directory: dir: %s, err: %w", verifyPath, err)
@@ -324,14 +326,14 @@ func sortTRCsFiles(trcFileSummaries []trcFileSummary) sortedTRCFileSummaries {
 	return trcFileSummaries
 }
 
-func verifySignature(outputPath, workingDir string) error {
+func verifySignature(cfg *config.Config) error {
 	// Wipe old temporary directories, except last 10
-	err := cleanupVerifyDirs(workingDir)
+	err := cleanupVerifyDirs(cfg.WorkingDir())
 	if err != nil {
 		log.Info("Unable to remove old verify directories", "err", err)
 	}
 
-	err = verifyTopologySignature(outputPath, workingDir)
+	err = verifyTopologySignature(cfg)
 	if err != nil {
 		return fmt.Errorf("signature verification failed: %w", err)
 	}

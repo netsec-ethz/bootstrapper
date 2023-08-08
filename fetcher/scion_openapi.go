@@ -47,19 +47,19 @@ const (
 	httpRequestTimeout     = 2 * time.Second
 )
 
-func FetchConfiguration(outputPath, workingDir string, securityMode config.SecurityMode, addr *net.TCPAddr) error {
-	err := PullTRCs(outputPath, workingDir, addr, securityMode)
+func FetchConfiguration(cfg *config.Config, addr *net.TCPAddr) error {
+	err := PullTRCs(cfg.SciondConfigDir, cfg.WorkingDir(), addr, cfg.SecurityMode)
 	if err != nil {
 		return err
 	}
-	if securityMode == config.Insecure {
-		err = PullTopology(outputPath, addr)
+	if cfg.SecurityMode == config.Insecure {
+		err = PullTopology(cfg.SciondConfigDir, addr)
 	} else {
-		err = PullSignedTopology(workingDir, addr)
+		err = PullSignedTopology(cfg.WorkingDir(), addr)
 		if err != nil {
 			return err
 		}
-		err = verifySignature(outputPath, workingDir)
+		err = verifySignature(cfg)
 	}
 	return err
 }

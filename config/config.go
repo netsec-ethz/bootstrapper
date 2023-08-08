@@ -66,8 +66,8 @@ type Config struct {
 	Logging         LogConfig                       `toml:"log,omitempty"`
 }
 
-func (c Config) WorkingDir() string {
-	return filepath.Join(c.SciondConfigDir, "bootstrapper")
+func (cfg Config) WorkingDir() string {
+	return filepath.Join(cfg.SciondConfigDir, "bootstrapper")
 }
 
 // LogConfig is the configuration for the logger.
