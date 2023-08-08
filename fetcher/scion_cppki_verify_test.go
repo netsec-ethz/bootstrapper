@@ -22,6 +22,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+
+	"github.com/netsec-ethz/bootstrapper/config"
 )
 
 // reuse test vectors from SCIONLab:
@@ -257,7 +259,7 @@ func TestVerify(t *testing.T) {
 	}
 
 	// run the actual test, verifying the signature using the signed topology
-	if err := verifyTopologySignature(tmpDir, bootstrapperPath); err != nil {
+	if err := verifyTopologySignature(&config.Config{SciondConfigDir: tmpDir}); err != nil {
 		log.Error("Signature verification failed: verifyTopologySignature", "err", err)
 		t.FailNow()
 	}
