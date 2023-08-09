@@ -104,9 +104,12 @@ func setupVerifyEnv(cfg *config.Config) (ctx context.Context, cancel context.Can
 	ctx, cancel = context.WithTimeout(context.Background(), verifyTimeout)
 
 	// check 'scion-pki' tool is on path and executable
-	if err = checkBinary("scion-pki"); err != nil {
+	if err = checkExecutable("scion-pki"); err != nil {
 		return
 	}
+
+	// Add crypto engine to context
+	ctx = context.WithValue(ctx, "nativeCrypto", cfg.CryptoEngine == "native")
 
 	// Create verify directory
 	timestamp := time.Now().Unix()
@@ -119,7 +122,7 @@ func setupVerifyEnv(cfg *config.Config) (ctx context.Context, cancel context.Can
 	return
 }
 
-func checkBinary(execName string) (err error){
+func checkExecutable(execName string) (err error){
 	_, err = exec.LookPath(execName)
 	return
 }
