@@ -259,7 +259,7 @@ func TestVerify(t *testing.T) {
 	}
 
 	// run the actual test, verifying the signature using the signed topology
-	if err := verifyTopologySignature(&config.Config{SciondConfigDir: tmpDir}); err != nil {
+	if err := verifyTopologySignature(&config.Config{SciondConfigDir: tmpDir, CryptoEngine: "openssl"}); err != nil {
 		log.Error("Signature verification failed: verifyTopologySignature", "err", err)
 		t.FailNow()
 	}
@@ -294,7 +294,7 @@ func TestExtractSignerInfo(t *testing.T) {
 	if err != nil {
 		log.Error("Failed to create signed file", "signedPayloadPath", signedPayloadPath, "err", err)
 	}
-	signerTRCid, signerIA, asCertChainPath, err := extractSignerInfo(context.TODO(), signedPayloadPath, tmpDir)
+	signerTRCid, signerIA, asCertChainPath, err := extractSignerInfo(context.WithValue(context.TODO(), "openssl", false), signedPayloadPath, tmpDir)
 	if err != nil {
 		log.Error("Getting signer info failed: extractSignerInfo", "err", err)
 		t.FailNow()

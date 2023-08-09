@@ -21,6 +21,9 @@ sciond_config_dir = "."
 # Set the verification behavior of the signature of the configuration file using the TRC (default permissive)
 security_mode = "insecure"
 
+# Set the crypto engine to use for the signature verification, options are 'openssl' and 'native' (default native)
+crypto_engine = "openssl"
+
 # Discovery mechanisms
 [mock]
     # Whether to enable the fake discovery or not (default false)

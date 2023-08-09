@@ -64,6 +64,7 @@ type Config struct {
 	DNSSD           hinting.DNSHintGeneratorConf    `toml:"dnssd"`
 	MDNS            hinting.MDNSHintGeneratorConf   `toml:"mdns"`
 	Logging         LogConfig                       `toml:"log,omitempty"`
+	CryptoEngine	string                          `toml:"crypto_engine,omitempty"`
 }
 
 func (cfg Config) WorkingDir() string {
@@ -134,6 +135,9 @@ func (cfg *Config) InitDefaults() {
 	}
 	if cfg.SecurityMode == "" {
 		cfg.SecurityMode = Permissive
+	}
+	if cfg.CryptoEngine == "" {
+		cfg.CryptoEngine = "native"
 	}
 	if cfg.InterfaceName == "" && (cfg.DHCPv6.Enable || cfg.IPv6.Enable || cfg.DHCP.Enable || cfg.MDNS.Enable) {
 		log15.Warn("iface flag not set, recommended when IPv6, DHCP or mDNS hinting is enabled")
