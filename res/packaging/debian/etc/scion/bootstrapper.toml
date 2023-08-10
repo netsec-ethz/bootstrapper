@@ -1,6 +1,9 @@
 # The folder where the retrieved topology and certificates are stored (default ".")
 sciond_config_dir = "/etc/scion/"
 
+# Set the crypto engine to use for the signature verification, options are 'openssl' and 'native' (default native)
+crypto_engine = "openssl"
+
 # Discovery mechanisms
 [mock]
         # Whether to enable the fake discovery or not (default false)
