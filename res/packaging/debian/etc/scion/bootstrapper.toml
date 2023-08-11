@@ -18,7 +18,7 @@ crypto_engine = "openssl"
     # Whether to enable DHCPv6 discovery or not (default false)
     enable = true
 [ipv6]
-    # Whether to enable IPv6 Neighbor Discovery Protocol (NDP)
+    # Whether to enable IPv6 Neighbor Discovery Protocol (NDP) for the
     # Router Advertisement DNSSL and RDNS discovery or not (default false)
     enable = true
 [dnssd]

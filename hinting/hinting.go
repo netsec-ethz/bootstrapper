@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	anapayaPEN = 55324 // Anapaya Systems Private Enterprise Number
+	anapayaPEN            = 55324 // Anapaya Systems Private Enterprise Number
 	DiscoveryPort  uint16 = 8041
 	DNSInfoTimeout        = 10 * time.Second
 )
@@ -205,7 +205,6 @@ func (m *MockHintGenerator) Generate(ipHintsChan chan<- net.TCPAddr) {
 	ipHintsChan <- *tcpAddr
 }
 
-
 func HasIPv6(iface *net.Interface) bool {
 	return len(ifaceIPv6Addrs(iface)) > 0
 }
@@ -225,7 +224,7 @@ func ifaceIPv6Addrs(iface *net.Interface) (ips []netip.Addr) {
 		}
 		ip, ok := netip.AddrFromSlice(ifaddr.IP)
 		// do not include IPv6 mapped IPv4 addresses and IPv6 loopback
-		if ok && ip.Is6() && !ip.Is4In6() && !ip.IsLoopback(){
+		if ok && ip.Is6() && !ip.Is4In6() && !ip.IsLoopback() {
 			ips = append(ips, ip)
 		}
 	}

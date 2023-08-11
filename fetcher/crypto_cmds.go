@@ -6,7 +6,7 @@ import (
 )
 
 // Verify the signature of signedTopology
-// using the CA bundle rootCertsBundlePath, and outputs the verified payload to verifiedTopology.
+// using the CA bundle rootCertsBundlePath, and output the verified payload to verifiedTopology.
 func cmsVerifyOutput(ctx context.Context, signedTopology, rootCertsBundlePath, verifiedTopology string) (err error) {
 	if !ctx.Value("nativeCrypto").(bool) {
 		if err = checkExecutable("openssl"); err != nil {
