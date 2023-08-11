@@ -44,7 +44,7 @@ crypto_engine = "openssl"
     # Fixed hex string for the client DUID, no separators, no 0x prefix:
     #client_id = "0001000100000000deadbeefaabb"
 [ipv6]
-    # Whether to enable IPv6 Neighbor Discovery Protocol (NDP)
+    # Whether to enable IPv6 Neighbor Discovery Protocol (NDP) for the
     # Router Advertisement DNSSL and RDNS discovery or not (default false)
     enable = false
 [dnssd]

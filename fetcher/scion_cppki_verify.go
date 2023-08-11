@@ -103,7 +103,7 @@ func setupVerifyEnv(cfg *config.Config) (ctx context.Context, cancel context.Can
 	// Signature verification should complete in a timely manner since it is a local operation
 	ctx, cancel = context.WithTimeout(context.Background(), verifyTimeout)
 
-	// check 'scion-pki' tool is on path and executable
+	// Check that 'scion-pki' tool is on path and executable
 	if err = checkExecutable("scion-pki"); err != nil {
 		return
 	}
@@ -122,7 +122,7 @@ func setupVerifyEnv(cfg *config.Config) (ctx context.Context, cancel context.Can
 	return
 }
 
-func checkExecutable(execName string) (err error){
+func checkExecutable(execName string) (err error) {
 	_, err = exec.LookPath(execName)
 	return
 }

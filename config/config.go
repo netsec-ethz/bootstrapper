@@ -64,10 +64,10 @@ type Config struct {
 	DNSSD           hinting.DNSHintGeneratorConf    `toml:"dnssd"`
 	MDNS            hinting.MDNSHintGeneratorConf   `toml:"mdns"`
 	Logging         LogConfig                       `toml:"log,omitempty"`
-	CryptoEngine	string                          `toml:"crypto_engine,omitempty"`
+	CryptoEngine    string                          `toml:"crypto_engine,omitempty"`
 }
 
-func (cfg Config) WorkingDir() string {
+func (cfg *Config) WorkingDir() string {
 	return filepath.Join(cfg.SciondConfigDir, "bootstrapper")
 }
 

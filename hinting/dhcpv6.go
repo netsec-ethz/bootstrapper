@@ -116,7 +116,7 @@ func getDuid(g *DHCPv6HintGenerator) (duid dhcpv6.Duid, err error) {
 		}
 	case duidEN, duidUUID:
 		// Not implemented
-		log.Error("Unsupported DUID type %s, set DUID directly as `client_id` " +
+		log.Error("Unsupported DUID type %s, set DUID directly as `client_id` "+
 			"or use the supported `DUID-LL` and `DUID-LLT`types.", "type", g.cfg.Duid)
 		err = fmt.Errorf("not implemented DUID type: %s", g.cfg.Duid)
 	default:
