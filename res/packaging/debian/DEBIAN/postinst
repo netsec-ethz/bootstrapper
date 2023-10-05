@@ -36,7 +36,7 @@ case "$1" in
         fi
 
         if [ ! -f /.dockerenv ]; then
-            systemctl enable --now scion-bootstrapper@"$iface".service >/dev/null 2>&1 || status=$?
+            systemctl enable --now scion-bootstrapper@"$iface".service > /dev/null 2>&1 || status=$?
             systemctl restart --now scion-daemon.service > /dev/null 2>&1 || true
         else
             # In a docker environment, run directly
@@ -46,7 +46,7 @@ case "$1" in
             if [ ! -f /.dockerenv ]; then
                 journalctl _SYSTEMD_INVOCATION_ID="$(systemctl show --value -p InvocationID scion-bootstrapper@ens3.service)" | awk 'BEGIN {FS="lvl=eror "} ; /lvl=eror msg=".*/{print "\t"$2;}' || true
             fi
-            echo "[x] Could not bootstrap SCION configuration in the current network, no SCION support available or manual configuration needed"
+            echo "[x] Could not bootstrap SCION configuration in the current network, no SCION support available or manual configuration needed."
         else
             echo "[*] ... and completed SCION endhost configuration successfully. Please start scion-dispatcher where required."
         fi
