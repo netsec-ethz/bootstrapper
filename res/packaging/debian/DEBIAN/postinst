@@ -25,9 +25,10 @@ case "$1" in
             systemctl daemon-reload > /dev/null 2>&1
         fi
 
+        status=0
         # retrieve the first active network interface
-        iface=$(ip -oneline address show up | awk '/inet.*brd/{print $2; exit}')
-        if [ $? -ne 0 ] || [ -z "$iface" ]; then
+        iface=$(ip -oneline address show up | awk '/inet.*brd/{print $2; exit}') || status=$?
+        if [ $status -ne 0 ] || [ -z "$iface" ]; then
             echo "[x] Could not find an active network interface, manual systemd startup needed"
             exit 0
         else
@@ -35,11 +36,19 @@ case "$1" in
         fi
 
         if [ ! -f /.dockerenv ]; then
-            systemctl enable --now scion-bootstrapper@$iface.service > /dev/null 2>&1
-            systemctl restart --now scion-daemon.service > /dev/null 2>&1
+            systemctl enable --now scion-bootstrapper@"$iface".service > /dev/null 2>&1 || status=$?
+            systemctl restart --now scion-daemon.service > /dev/null 2>&1 || true
         else
             # In a docker environment, run directly
-            /usr/bin/bootstrapper -iface $iface -config /etc/scion/bootstrapper.toml
+            /usr/bin/bootstrapper -iface "$iface" -config /etc/scion/bootstrapper.toml || status=$?
+        fi
+        if [ $status -ne 0 ]; then
+            if [ ! -f /.dockerenv ]; then
+                journalctl _SYSTEMD_INVOCATION_ID="$(systemctl show --value -p InvocationID scion-bootstrapper@ens3.service)" | awk 'BEGIN {FS="lvl=eror "} ; /lvl=eror msg=".*/{print "\t"$2;}' || true
+            fi
+            echo "[x] Could not bootstrap SCION configuration in the current network, no SCION support available or manual configuration needed."
+        else
+            echo "[*] ... and completed SCION endhost configuration successfully. Please start scion-dispatcher where required."
         fi
         exit 0
         ;;
