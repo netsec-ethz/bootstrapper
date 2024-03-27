@@ -294,7 +294,7 @@ func TestExtractSignerInfo(t *testing.T) {
 	if err != nil {
 		log.Error("Failed to create signed file", "signedPayloadPath", signedPayloadPath, "err", err)
 	}
-	signerTRCid, signerIA, asCertChainPath, err := extractSignerInfo(context.WithValue(context.TODO(), "openssl", false), signedPayloadPath, tmpDir)
+	signerTRCid, signerIA, asCertChainPath, err := extractSignerInfo(context.WithValue(context.TODO(), "nativeCrypto", false), signedPayloadPath, tmpDir)
 	if err != nil {
 		log.Error("Getting signer info failed: extractSignerInfo", "err", err)
 		t.FailNow()
