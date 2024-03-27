@@ -70,8 +70,8 @@ func verifyTopologySignature(cfg *config.Config) error {
 
 	// verify the AS certificate chain (but not the payload signature) back to the TRCs of the ISD follows the
 	// SCION CP PKI rules about cert type, key usage:
-	if err = spkiCertVerify(ctx, sortedTRCsPaths, asCertChainPath); err != nil {
-		return fmt.Errorf("unable to validate certificate chain: %w", err)
+	if stdoutStderr, err := spkiCertVerify(ctx, sortedTRCsPaths, asCertChainPath); err != nil {
+		return fmt.Errorf("unable to validate certificate chain: %s %w", stdoutStderr, err)
 	}
 
 	var unvalidatedTopologyPath string
