@@ -16,9 +16,9 @@ func spkiTRCExtractCerts(ctx context.Context, trustAnchorTRC, rootCertsBundlePat
 
 // spkiCertVerify verifies the AS certificate asCertChainPath
 // against the sorted TRCs in the update chain trcsUpdateChain.
-func spkiCertVerify(ctx context.Context, trcsUpdateChain []string, asCertChainPath string) error {
+func spkiCertVerify(ctx context.Context, trcsUpdateChain []string, asCertChainPath string) ([]byte, error) {
 	return exec.CommandContext(ctx, "scion-pki", "certificate", "verify",
-		"--trc", strings.Join(trcsUpdateChain, ","), asCertChainPath).Run()
+		"--trc", strings.Join(trcsUpdateChain, ","), asCertChainPath).CombinedOutput()
 }
 
 // spkiTRCVerify verifies the TRC update chain for candidateTRCPath anchored in the TRCs trcUpdateChainPaths
