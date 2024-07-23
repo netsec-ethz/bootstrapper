@@ -159,9 +159,9 @@ expose the endpoints needed by the bootstrapper:
 - create a link to the *trc* index containing the TRCs to serve at
   `/srv/http/scion/trcs.json`.
 - create a link to the *trc* metadata containing the description of a TRC at
-  `/srv/http/scion/trcs/ISD{isd}-B{base}-S{serial}.trc`.
+  `/srv/http/scion/trcs/isd{isd}-b{base}-s{serial}.json`.
 - create a link to the *trc* blob containing the TRC file itself at
-  `/srv/http/scion/trcs/isd{isd}-b{base}-s{serial}/blob`.
+  `/srv/http/scion/trcs/ISD{isd}-B{base}-S{serial}.trc`.
 
 ### Site configuration
 
