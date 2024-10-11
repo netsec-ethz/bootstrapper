@@ -19,6 +19,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"net/netip"
 
 	log "github.com/inconshreveable/log15"
 	"github.com/insomniacslk/dhcp/dhcpv4"
@@ -111,7 +112,8 @@ func (g *DHCPHintGenerator) dispatchDNSInfo(ack *dhcpv4.DHCPv4, dnsChan chan<- D
 	log.Debug("DHCP DNS search domain option", "searchDomains", searchDomains)
 	dnsInfo := DNSInfo{}
 	for _, item := range resolvers {
-		dnsInfo.resolvers = append(dnsInfo.resolvers, item.String())
+		res, _ := netip.AddrFromSlice(item)
+		dnsInfo.resolvers = append(dnsInfo.resolvers, res)
 	}
 	if searchDomains != nil {
 		for _, item := range searchDomains.Labels {

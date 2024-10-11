@@ -18,6 +18,7 @@ package hinting
 import (
 	"math/rand"
 	"net"
+	"net/netip"
 	"sort"
 	"strconv"
 	"strings"
@@ -33,7 +34,7 @@ const (
 )
 
 type DNSInfo struct {
-	resolvers     []string
+	resolvers     []netip.Addr
 	searchDomains []string
 }
 
@@ -81,24 +82,24 @@ func (g *DNSSDHintGenerator) Generate(ipHintsChan chan<- net.TCPAddr) {
 	log.Info("DNS hinting done")
 }
 
-func getDNSSDQuery(resolver, domain string) string {
+func getDNSSDQuery(resolver netip.Addr, domain string) string {
 	query := discoveryServiceDNSName + "." + domain + "."
 	log.Debug("DNS-SD", "query", query, "rr", dns.TypePTR, "resolver", resolver)
 	return query
 }
 
 // Straightforward Naming Authority Pointer
-func getDNSNAPTRQuery(resolver, domain string) string {
+func getDNSNAPTRQuery(resolver netip.Addr, domain string) string {
 	query := domain + "."
 	log.Debug("DNS-S-NAPTR", "query", query, "rr", dns.TypeNAPTR, "resolver", resolver)
 	return query
 }
 
-func resolveDNS(resolver, query string, resultPort uint16, dnsRR uint16, ipHintsChan chan<- net.TCPAddr) {
+func resolveDNS(resolver netip.Addr, query string, resultPort uint16, dnsRR uint16, ipHintsChan chan<- net.TCPAddr) {
 	msg := new(dns.Msg)
 	msg.SetQuestion(query, dnsRR)
 	msg.RecursionDesired = true
-	result, err := dns.Exchange(msg, resolver+":53")
+	result, err := dns.Exchange(msg, net.JoinHostPort(resolver.String(), "53"))
 	if err != nil {
 		if dnsRR != dns.TypeAAAA {
 			log.Error("DNS-SD failed", "err", err)
@@ -168,11 +169,11 @@ func resolveDNS(resolver, query string, resultPort uint16, dnsRR uint16, ipHints
 	}
 }
 
-func queryTXTPortRecord(resolver, query string) (resultPort uint16) {
+func queryTXTPortRecord(resolver netip.Addr, query string) (resultPort uint16) {
 	msg := new(dns.Msg)
 	msg.SetQuestion(query, dns.TypeTXT)
 	msg.RecursionDesired = false
-	res, err := dns.Exchange(msg, resolver+":53")
+	res, err := dns.Exchange(msg, net.JoinHostPort(resolver.String(), "53"))
 	if err != nil {
 		log.Error("DNS-SD failed to resolve TXT record for S-NAPTR", "err", err)
 	}

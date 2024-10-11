@@ -134,9 +134,9 @@ func hasDNSOptions(opts []ndp.Option) bool {
 func (g *IPv6HintGenerator) dispatchDNSInfo(resolvers []netip.Addr, searchDomains []string, dnsChan chan<- DNSInfo) {
 	log.Debug("RA DNS resolver option", "resolvers", resolvers)
 	log.Debug("RA DNS search domain option", "searchDomains", searchDomains)
-	dnsInfo := DNSInfo{resolvers: []string{}, searchDomains: []string{}}
+	dnsInfo := DNSInfo{resolvers: []netip.Addr{}, searchDomains: []string{}}
 	for _, r := range resolvers {
-		dnsInfo.resolvers = append(dnsInfo.resolvers, r.String())
+		dnsInfo.resolvers = append(dnsInfo.resolvers, r)
 	}
 	for _, d := range searchDomains {
 		dnsInfo.searchDomains = append(dnsInfo.searchDomains, d)

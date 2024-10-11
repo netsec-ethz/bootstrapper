@@ -20,7 +20,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"net"
+	"net/netip"
 	"os"
 	"strings"
 
@@ -38,7 +38,8 @@ func getDNSConfigResolv() (dnsInfo *DNSInfo) {
 		return nil
 	}
 	defer fd.Close()
-	var DNSServers, DNSSearchDomains []string
+	var DNSServers []netip.Addr
+	var DNSSearchDomains []string
 	scanner := bufio.NewScanner(fd)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -60,8 +61,8 @@ func getDNSConfigResolv() (dnsInfo *DNSInfo) {
 		switch optionName {
 		case "nameserver":
 			for _, serverIP := range optionValues {
-				if ip := net.ParseIP(serverIP); ip != nil && len(DNSServers) < 3 {
-					DNSServers = append(DNSServers, serverIP)
+				if ip, err := netip.ParseAddr(serverIP); err == nil && len(DNSServers) < 3 {
+					DNSServers = append(DNSServers, ip)
 				}
 			}
 		case "domain":

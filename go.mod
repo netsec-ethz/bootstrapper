@@ -24,4 +24,4 @@ require (
 
 replace github.com/insomniacslk/dhcp => github.com/stapelberg/dhcp v0.0.0-20190429172946-5244c0daddf0
 
-go 1.18
+go 1.21

@@ -71,11 +71,14 @@ func (b *Bootstrapper) tryBootstrapping() error {
 		hinting.NewMockHintGenerator(&cfg.MOCK),
 		// Gets DNS information from IPv6 RAs
 		hinting.NewIPv6HintGenerator(&cfg.IPv6, b.iface),
+		// Gets DHCP(v6) hints
 		hinting.NewDHCPv6HintGenerator(&cfg.DHCPv6, b.iface),
 		hinting.NewDHCPHintGenerator(&cfg.DHCP, b.iface),
-		// XXX: DNS-SD depends on DNS resolution working, which can depend on DHCP for getting the local DNS resolver IP
+		// Note: DNS-SD depends on DNS resolution working,
+		// which can depend on DHCP for getting the local DNS resolver IP
 		hinting.NewDNSSDHintGenerator(&cfg.DNSSD),
-		// XXX: mDNS depends on the DNS search domain to be correct, which can depend on DHCP for getting it
+		// Note: mDNS depends on the DNS search domain to be correct,
+		// which can depend on DHCP for getting it
 		hinting.NewMDNSHintGenerator(&cfg.MDNS, b.iface))
 	wg := sync.WaitGroup{}
 	for _, g := range hintGenerators {

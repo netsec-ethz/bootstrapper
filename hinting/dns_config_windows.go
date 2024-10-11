@@ -16,6 +16,7 @@ package hinting
 
 import (
 	"errors"
+	"net/netip"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -45,13 +46,15 @@ func getDNSConfigIPHlpAPI() (dnsInfo *DNSInfo) {
 	if ias == nil {
 		return nil
 	}
-	var DNSServers, DNSSearchDomains []string
+	var DNSServers []netip.Addr
+	var DNSSearchDomains []string
 	for pipaa := (*windows.IpAdapterAddresses)(unsafe.Pointer(&ias[0])); pipaa != nil; pipaa = pipaa.Next {
 		if pipaa.FirstDnsServerAddress != nil {
 			for ds := pipaa.FirstDnsServerAddress; ds != nil; ds = ds.Next {
 				dsIP := ds.Address.IP()
 				if dsIP != nil {
-					DNSServers = append(DNSServers, dsIP.String())
+					dsIP, _ := netip.AddrFromSlice(dsIP)
+					DNSServers = append(DNSServers, dsIP)
 				}
 			}
 		}
