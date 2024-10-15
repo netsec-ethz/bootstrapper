@@ -25,15 +25,17 @@ import (
 )
 
 const (
-	anapayaPEN            = 55324 // Anapaya Systems Private Enterprise Number
-	DiscoveryPort  uint16 = 8041
-	DNSInfoTimeout        = 10 * time.Second
+	anapayaPEN             = 55324 // Anapaya Systems Private Enterprise Number
+	DiscoveryPort  uint16  = 8041
+	DNSInfoTimeout         = 8 * time.Second
+	DNSInfoTimeoutFallback = 10 * time.Second
 )
 
 var (
-	dnsInfoChan    = make(chan DNSInfo)
-	dnsInfoDone    = make(chan struct{})
-	dnsInfoWriters sync.WaitGroup
+	dnsInfoChan         = make(chan DNSInfo)
+	dnsInfoDone         = make(chan struct{})
+	dnsInfoFallbackDone = make(chan struct{})
+	dnsInfoWriters      sync.WaitGroup
 
 	dispatcher       *dnsInfoDispatcher
 	singleDispatcher = &sync.Mutex{}
@@ -161,15 +163,23 @@ func initDispatcher() (dnsChan <-chan DNSInfo) {
 	}
 	dispatcher = &dnsInfoDispatcher{}
 	dnsChan = dispatcher.subscribe()
+	// Start search domain fallback routine, listens for resolver IPs
+	go getFallbackSearchDomains(dnsInfoChan)
 	// Only start dispatcher when we have subscribers
 	go dispatcher.publish()
 	// Signal dnsInfoChan senders after timeout
 	dnsInfoTimeout := time.After(DNSInfoTimeout)
+	// Signal dnsInfoChan fallback senders after timeout
+	dnsInfoTimeoutFallback := time.After(DNSInfoTimeoutFallback)
 	go func() {
 		select {
 		case <-dnsInfoTimeout:
-			// Signal senders
+			// Signal senders about timeout
 			close(dnsInfoDone)
+		case <-dnsInfoTimeoutFallback:
+			// Signal fallback about timeout
+			close(dnsInfoFallbackDone)
+			// Wait for remaining senders
 			dnsInfoWriters.Wait()
 			// Stop publishing new DNSInfo
 			close(dnsInfoChan)
