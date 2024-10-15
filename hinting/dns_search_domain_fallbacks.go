@@ -22,6 +22,15 @@ func domainsFromHostnames(hostnames []string) (domains []string) {
 				continue
 			}
 			domainString = strings.Join([]string{label, domainString}, ".")
+			// Filter out Effective ccTLDs (of the form "co.uk"), as we are only interested in the ETLD+1 domains
+			if 5 == len(domainString) && // TODO: complete TLD specific exceptions, or directly use PSL
+				(label == "co" ||
+					label == "ac" ||
+					label == "re" ||
+					label == "ne") {
+				// do not add country-code second-level ETLD domains to domains candidate list
+				continue
+			}
 			if !slices.Contains(domains, domainString) {
 				domains = append(domains, domainString)
 			}
