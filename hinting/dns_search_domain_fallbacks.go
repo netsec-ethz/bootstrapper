@@ -58,6 +58,18 @@ Fallback:
 		}
 	}
 
+	// Collect domain information from WHOIS contact information
+	if len(searchDomainSet) == 0 {
+		// attempt fallback to WHOIS contact information heuristics as
+		// reverse DNS lookups provided no results.
+		for _, ip := range ips {
+			domains := reverseLookupWhois(ip)
+			for _, searchDomain := range domains {
+				searchDomainSet[searchDomain] = struct{}{}
+			}
+		}
+	}
+
 	resolvers := make([]netip.Addr, 0, len(resolverSet))
 	for k := range resolverSet {
 		resolvers = append(resolvers, k)
