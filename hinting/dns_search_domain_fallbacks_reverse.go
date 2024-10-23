@@ -3,7 +3,7 @@ package hinting
 import (
 	"context"
 	"errors"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"net/netip"
 	"time"
@@ -37,13 +37,13 @@ func getAkaNS() (nameserver string, err error) {
 	defer cancel()
 	nameservers, err := resolver.LookupNS(ctx, akamaiDomain)
 	if err == nil {
-		return nameservers[rand.Intn(len(nameservers))].Host, err
+		return nameservers[rand.IntN(len(nameservers))].Host, err
 	}
 	if err, ok := err.(*net.DNSError); ok && err.IsNotFound {
 		// Do not attempt further fallback to a public resolver.
 		// We got a NXDOMAIN response or no NS type response. Since we know the NS record exists,
 		// it must have been intentionally shadowed by the system default resolver.
-		return nil, err
+		return "", err
 	}
 
 	m := new(dns.Msg)
@@ -57,7 +57,7 @@ func getAkaNS() (nameserver string, err error) {
 		err = errors.New("getAkaNS: No DNS RR answer")
 		return "", err
 	}
-	if ns, ok := in.Answer[rand.Intn(len(in.Answer))].(*dns.NS); ok {
+	if ns, ok := in.Answer[rand.IntN(len(in.Answer))].(*dns.NS); ok {
 		return ns.Ns, nil
 	}
 	return "", errors.New("getAkaNS: Invalid NS record")

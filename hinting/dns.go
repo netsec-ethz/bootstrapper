@@ -16,7 +16,7 @@
 package hinting
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"net/netip"
 	"sort"
@@ -214,10 +214,10 @@ func (s byPriority) Less(i, j int) bool {
 		return false
 	} else {
 		if s[i].Weight == 0 && s[j].Weight == 0 {
-			return rand.Intn(2) == 0
+			return rand.IntN(2) == 0
 		}
 		max := int(s[i].Weight) + int(s[j].Weight)
-		return rand.Intn(max) < int(s[i].Weight)
+		return rand.IntN(max) < int(s[i].Weight)
 	}
 }
 

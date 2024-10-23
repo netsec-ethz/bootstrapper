@@ -1,9 +1,12 @@
 package hinting
 
 import (
-	"github.com/stretchr/testify/assert"
+	"crypto/rand"
+	"net"
 	"net/netip"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestReverseLookupDomains(t *testing.T) {
@@ -32,6 +35,8 @@ func TestReverseLookupDomains(t *testing.T) {
 				domain string
 			}{
 				{ip: netip.MustParseAddr("66.180.178.131"), domain: "princeton.edu"},
+				//{ip: randIPFromCIDR("128.112.0.0/16"), domain: "princeton.edu"},
+				{ip: randIPFromCIDR("128.112.66.0/23"), domain: "princeton.edu"},
 			},
 		},
 		{
@@ -42,6 +47,7 @@ func TestReverseLookupDomains(t *testing.T) {
 			}{
 				{ip: netip.MustParseAddr("128.143.33.137"), domain: "virginia.edu"},
 				{ip: netip.MustParseAddr("128.143.33.144"), domain: "virginia.edu"},
+				{ip: randIPFromCIDR("128.143.0.128/25"), domain: "virginia.edu"},
 			},
 		},
 		{
@@ -51,6 +57,7 @@ func TestReverseLookupDomains(t *testing.T) {
 				domain string
 			}{
 				{ip: netip.MustParseAddr("130.59.31.80"), domain: "switch.ch"},
+				{ip: randIPFromCIDR("130.59.2.128/25"), domain: "switch.ch"},
 			},
 		},
 		{
@@ -59,6 +66,7 @@ func TestReverseLookupDomains(t *testing.T) {
 				ip     netip.Addr
 				domain string
 			}{
+				//{ip: netip.MustParseAddr("203.250.215.48"), domain: "kreonet.net"},
 				{ip: netip.MustParseAddr("134.75.254.11"), domain: "kreonet.net"},
 				{ip: netip.MustParseAddr("134.75.254.12"), domain: "kreonet.net"},
 			},
@@ -70,6 +78,7 @@ func TestReverseLookupDomains(t *testing.T) {
 				domain string
 			}{
 				{ip: netip.MustParseAddr("163.152.6.10"), domain: "korea.ac.kr"},
+				{ip: randIPFromCIDR("163.152.6.16/29"), domain: "korea.ac.kr"},
 			},
 		},
 	}
@@ -123,4 +132,42 @@ func TestDomainsFromHostnamesDerivation(t *testing.T) {
 			assert.EqualValues(t, v.domains, res, "")
 		}
 	}
+}
+
+// randIPFromCIDR returns a random host IP in the subnet specified by the CIDR
+func randIPFromCIDR(cidr string) (ip netip.Addr) {
+	_, ipNet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return
+	}
+	ip, ok := netip.AddrFromSlice(ipNet.IP)
+	if !ok {
+		return
+	}
+	var randBytes []byte
+	randBytes = make([]byte, net.IPv6len)
+	_, err = rand.Read(randBytes)
+	if err != nil {
+		return
+	}
+	if ip.Is4() {
+		randBytes = randBytes[:net.IPv4len]
+	}
+	randomIP := net.IP(randBytes)
+	maskedIP := randomIP.Mask(invertMask(ipNet.Mask))
+	if len(ipNet.IP) != len(maskedIP) {
+		return
+	}
+	for i := range ipNet.IP {
+		randomIP[i] = ipNet.IP[i] | maskedIP[i]
+	}
+	return netip.MustParseAddr(randomIP.String())
+}
+
+func invertMask(mask net.IPMask) (invertedMask net.IPMask) {
+	invertedMask = make(net.IPMask, len(mask))
+	for i, b := range mask {
+		invertedMask[i] = 0xff ^ b
+	}
+	return
 }
