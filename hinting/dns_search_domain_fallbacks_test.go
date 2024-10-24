@@ -2,8 +2,11 @@ package hinting
 
 import (
 	"crypto/rand"
+	"fmt"
 	"net"
 	"net/netip"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -160,11 +163,44 @@ func TestReverseLookupWHOIS(t *testing.T) {
 		t.Log(tc.name)
 		for _, v := range tc.values {
 			t.Log(v.ip)
-			res := reverseLookupWhois(v.ip)
+			res := reverseLookupWHOIS(v.ip)
 			t.Log(res)
-			assert.Subset(t, res, []string{v.domain}, "")
+			assert.Subset(t, res, []string{v.domain},
+				"WHOIS record for IP `%s` does not contain contact information with the domain `%s`.\n"+
+					"Run `go test -v -run TestWHOISInfo ./hinting/dns_search_domain_fallbacks_test.go -args IP domain`"+
+					" to debug WHOIS information for `IP` and expected `domain`.",
+				v.ip, v.domain)
 		}
 	}
+}
+
+func TestWHOISInfo(t *testing.T) {
+	if !strings.Contains(fmt.Sprintln(os.Args), "-test.run=") {
+		return
+	}
+	// Manual test for debugging with -run
+	args := strings.Fields(strings.Split(fmt.Sprintln(os.Args), "-test.run=")[1])
+	if len(args) == 1 {
+		// Do not run when not explicitly called with test arguments.
+		return
+	}
+	if len(args) != 3 {
+		assert.FailNow(t, "Call TestWHOISInfo with"+
+			"`go test -v -run TestWHOISInfo ./hinting/dns_search_domain_fallbacks_test.go -args IP domain`",
+			"args: %s", os.Args)
+	}
+	arg1 := netip.MustParseAddr(args[1])
+	arg2 := args[2]
+	addr := arg1
+	response, err := resolveWHOISRedirects(addr, ianaWHOIS)
+	if err != nil {
+		assert.FailNow(t, "WHOIS lookup failed", "err: %s", err)
+	}
+	domains := extractEmailDomains(response)
+	assert.Subset(t, domains, []string{arg2},
+		"WHOIS record for IP `%s` does not contain contact information with the domain `%s`.\n"+
+			"Full WHOIS: %s",
+		arg1, arg2, response)
 }
 
 func TestDomainsFromHostnamesDerivation(t *testing.T) {
@@ -183,13 +219,14 @@ func TestDomainsFromHostnamesDerivation(t *testing.T) {
 			}{
 				{hostnames: []string{"82-130-64-0.net4.ethz.ch."}, domains: []string{"net4.ethz.ch", "ethz.ch"}},
 				{hostnames: []string{"service-id-api-cd-dcz1-server-4-b.ethz.ch."}, domains: []string{"ethz.ch"}},
+				{hostnames: []string{"cms-publish."}, domains: []string{"local"}},
 			},
 		},
 		{
-			name: "ETHZ",
+			name: "KU",
 			values: []struct {
 				hostnames []string
-				domains []string
+				domains   []string
 			}{
 				{hostnames: []string{"60.korea.ac.kr.", "sub.korea.ac.kr."}, domains: []string{"korea.ac.kr"}},
 			},
