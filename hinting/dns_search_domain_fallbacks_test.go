@@ -35,7 +35,6 @@ func TestReverseLookupDomains(t *testing.T) {
 				domain string
 			}{
 				{ip: netip.MustParseAddr("66.180.178.131"), domain: "princeton.edu"},
-				//{ip: randIPFromCIDR("128.112.0.0/16"), domain: "princeton.edu"},
 				{ip: randIPFromCIDR("128.112.66.0/23"), domain: "princeton.edu"},
 			},
 		},
@@ -66,7 +65,6 @@ func TestReverseLookupDomains(t *testing.T) {
 				ip     netip.Addr
 				domain string
 			}{
-				//{ip: netip.MustParseAddr("203.250.215.48"), domain: "kreonet.net"},
 				{ip: netip.MustParseAddr("134.75.254.11"), domain: "kreonet.net"},
 				{ip: netip.MustParseAddr("134.75.254.12"), domain: "kreonet.net"},
 			},
@@ -88,6 +86,81 @@ func TestReverseLookupDomains(t *testing.T) {
 		for _, v := range tc.values {
 			t.Log(v.ip)
 			res := reverseLookupDomains(v.ip)
+			t.Log(res)
+			assert.Subset(t, res, []string{v.domain}, "")
+		}
+	}
+}
+
+func TestReverseLookupWHOIS(t *testing.T) {
+
+	testCases := []struct {
+		name   string
+		values []struct {
+			ip     netip.Addr
+			domain string
+		}
+	}{
+		{
+			name: "ETHZ",
+			values: []struct {
+				ip     netip.Addr
+				domain string
+			}{
+				{ip: netip.MustParseAddr("129.132.19.216"), domain: "ethz.ch"},
+			},
+		},
+		{
+			name: "PU",
+			values: []struct {
+				ip     netip.Addr
+				domain string
+			}{
+				{ip: netip.MustParseAddr("128.112.0.11"), domain: "princeton.edu"},
+			},
+		},
+		{
+			name: "VU",
+			values: []struct {
+				ip     netip.Addr
+				domain string
+			}{
+				{ip: netip.MustParseAddr("128.143.3.126"), domain: "virginia.edu"},
+			},
+		},
+		{
+			name: "SWITCH",
+			values: []struct {
+				ip     netip.Addr
+				domain string
+			}{
+				{ip: netip.MustParseAddr("130.59.31.35"), domain: "switch.ch"},
+			},
+		},
+		{
+			name: "KREONET",
+			values: []struct {
+				ip     netip.Addr
+				domain string
+			}{
+				{ip: netip.MustParseAddr("203.250.215.48"), domain: "kreonet.net"},
+			},
+		},
+		{
+			name: "KU",
+			values: []struct {
+				ip     netip.Addr
+				domain string
+			}{
+				{ip: netip.MustParseAddr("163.152.6.1"), domain: "korea.ac.kr"},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Log(tc.name)
+		for _, v := range tc.values {
+			t.Log(v.ip)
+			res := reverseLookupWhois(v.ip)
 			t.Log(res)
 			assert.Subset(t, res, []string{v.domain}, "")
 		}
