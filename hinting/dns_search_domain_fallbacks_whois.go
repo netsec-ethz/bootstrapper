@@ -6,8 +6,6 @@ import (
 	"net/mail"
 	"net/netip"
 	"slices"
-
-	//"slices"
 	"strings"
 )
 
@@ -61,17 +59,7 @@ func resolveWhoisRedirects(addr netip.Addr, server string) (response string, err
 		if strings.HasPrefix(entry, "ReferralServer:") {
 			value := strings.TrimPrefix(entry, "ReferralServer:")
 			whoisRefer := strings.TrimPrefix(strings.TrimSpace(value), "whois://")
-			//if slices.Contains(rirWHOIS, whoisRefer) {
-			//	whoisServer = whoisRefer
-			//	continue
-			//}
-			match := false
-			for _, rserver := range rirWHOIS {
-				if match = rserver == whoisRefer; match {
-					break
-				}
-			}
-			if match {
+			if slices.Contains(rirWHOIS, whoisRefer) {
 				whoisServer = whoisRefer
 				continue
 			}
