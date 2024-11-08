@@ -63,7 +63,7 @@ Fallback:
 		// attempt fallback to WHOIS contact information heuristics as
 		// reverse DNS lookups provided no results.
 		for _, ip := range ips {
-			domains := reverseLookupWhois(ip)
+			domains := reverseLookupWHOIS(ip)
 			for _, searchDomain := range domains {
 				searchDomainSet[searchDomain] = struct{}{}
 			}
