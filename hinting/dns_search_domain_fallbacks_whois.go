@@ -6,8 +6,6 @@ import (
 	"net/mail"
 	"net/netip"
 	"slices"
-
-	//"slices"
 	"strings"
 )
 
@@ -22,15 +20,15 @@ var (
 	}
 )
 
-func reverseLookupWhois(addr netip.Addr) (domains []string) {
-	response, err := resolveWhoisRedirects(addr, ianaWHOIS)
+func reverseLookupWHOIS(addr netip.Addr) (domains []string) {
+	response, err := resolveWHOISRedirects(addr, ianaWHOIS)
 	if err != nil {
 		return
 	}
 	return extractEmailDomains(response)
 }
 
-func resolveWhoisRedirects(addr netip.Addr, server string) (response string, err error) {
+func resolveWHOISRedirects(addr netip.Addr, server string) (response string, err error) {
 	whoisServer := server
 	for i := 0; i < 10; i++ {
 		// arbitrary upper limit of 10 redirects allowed, usually no more than 3 (IANA, RIR legacy registration, RIR)
@@ -39,7 +37,7 @@ func resolveWhoisRedirects(addr netip.Addr, server string) (response string, err
 		if err != nil {
 			return
 		}
-		response, err = queryWhois(raddr, addr)
+		response, err = queryWHOIS(raddr, addr)
 		if err != nil {
 			return
 		}
@@ -61,17 +59,7 @@ func resolveWhoisRedirects(addr netip.Addr, server string) (response string, err
 		if strings.HasPrefix(entry, "ReferralServer:") {
 			value := strings.TrimPrefix(entry, "ReferralServer:")
 			whoisRefer := strings.TrimPrefix(strings.TrimSpace(value), "whois://")
-			//if slices.Contains(rirWHOIS, whoisRefer) {
-			//	whoisServer = whoisRefer
-			//	continue
-			//}
-			match := false
-			for _, rserver := range rirWHOIS {
-				if match = rserver == whoisRefer; match {
-					break
-				}
-			}
-			if match {
+			if slices.Contains(rirWHOIS, whoisRefer) {
 				whoisServer = whoisRefer
 				continue
 			}
@@ -81,7 +69,7 @@ func resolveWhoisRedirects(addr netip.Addr, server string) (response string, err
 	return
 }
 
-func queryWhois(serverTCPAddr *net.TCPAddr, queryAddr netip.Addr) (response string, err error) {
+func queryWHOIS(serverTCPAddr *net.TCPAddr, queryAddr netip.Addr) (response string, err error) {
 	var tcpConn *net.TCPConn
 	var responseBuff []byte
 	tcpConn, err = net.DialTCP("tcp", nil, serverTCPAddr)
