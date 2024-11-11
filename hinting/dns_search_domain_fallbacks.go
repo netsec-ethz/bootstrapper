@@ -47,7 +47,7 @@ Fallback:
 		// if all configured IPs are private.
 		ip, err := queryExternalIP()
 		if err == nil {
-			ips = append(ips, *ip)
+			ips = append(ips, ip)
 		}
 	}
 
@@ -96,16 +96,17 @@ func getPublicAddresses() (ips []netip.Addr) {
 		return
 	}
 	for _, iface := range ifaces {
-		addrs, err := iface.Addrs()
+		ifaddrs, err := iface.Addrs()
 		if err != nil {
 			continue
 		}
-		for _, addr := range addrs {
-			ip, err := netip.ParseAddr(addr.String())
-			if err != nil {
+		for _, ifaddr := range ifaddrs {
+			ifaddr, ok := ifaddr.(*net.IPNet)
+			if !ok {
 				continue
 			}
-			if !ip.IsPrivate() {
+			ip, ok := netip.AddrFromSlice(ifaddr.IP)
+			if ok && !ip.IsPrivate() {
 				ips = append(ips, ip)
 			}
 		}

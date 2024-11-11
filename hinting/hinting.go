@@ -172,17 +172,20 @@ func initDispatcher() (dnsChan <-chan DNSInfo) {
 	// Signal dnsInfoChan fallback senders after timeout
 	dnsInfoTimeoutFallback := time.After(DNSInfoTimeoutFallback)
 	go func() {
-		select {
-		case <-dnsInfoTimeout:
-			// Signal senders about timeout
-			close(dnsInfoDone)
-		case <-dnsInfoTimeoutFallback:
-			// Signal fallback about timeout
-			close(dnsInfoFallbackDone)
-			// Wait for remaining senders
-			dnsInfoWriters.Wait()
-			// Stop publishing new DNSInfo
-			close(dnsInfoChan)
+		for {
+			select {
+			case <-dnsInfoTimeout:
+				// Signal senders about timeout
+				close(dnsInfoDone)
+			case <-dnsInfoTimeoutFallback:
+				// Signal fallback about timeout
+				close(dnsInfoFallbackDone)
+				// Wait for remaining senders
+				dnsInfoWriters.Wait()
+				// Stop publishing new DNSInfo
+				close(dnsInfoChan)
+				return
+			}
 		}
 	}()
 	return
