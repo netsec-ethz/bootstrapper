@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -242,6 +243,45 @@ func TestDomainsFromHostnamesDerivation(t *testing.T) {
 			assert.EqualValues(t, v.domains, res, "")
 		}
 	}
+}
+
+func TestSearchDomainFallbacks(t *testing.T) {
+	dnsChanReadable := dispatcher.getDNSConfig()
+	var regular []DNSInfo
+	var fallback []DNSInfo
+
+	// get info from happy path
+	r := <-dnsChanReadable
+	regular = append(regular, r)
+	// wait for dnsInfoDone to be closed to move to fallback
+	time.Sleep(DNSInfoTimeout)
+
+	// get info from fallback
+	select {
+	case <-dnsInfoFallbackDone:
+		// Fallback timed out
+	case r, ok := <-dnsChanReadable:
+		if ok {
+			fallback = append(fallback, r)
+		}
+	}
+
+	t.Log(regular)
+	t.Log(fallback)
+	assert.Condition(t, func() bool { return len(regular) != 0 || len(fallback) != 0 },
+		"Both regular host system and DNS based DNS Search Domain discovery failed.")
+}
+
+func TestDNSLookupExternalIP(t *testing.T) {
+	ip, err := queryExternalIP()
+	assert.NoError(t, err, "queryExternalIP() failed with error %s.", err)
+	assert.NotEmpty(t, ip, "queryExternalIP() did not return any external IP.")
+}
+
+func TestDNSLookupAkaNS(t *testing.T) {
+	ns, err := getAkaNS()
+	assert.NoError(t, err, "getAkaNS() failed with error %s.", err)
+	assert.NotEmpty(t, ns, "getAkaNS() did not return the nameserver IP.")
 }
 
 // randIPFromCIDR returns a random host IP in the subnet specified by the CIDR

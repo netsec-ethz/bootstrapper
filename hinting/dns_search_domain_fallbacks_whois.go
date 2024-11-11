@@ -111,5 +111,13 @@ func extractEmailDomains(response string) (domains []string) {
 		}
 	}
 	// filter out RIR domains
-	return domainsFromHostnames(hostnames)
+	filteredHostnames := hostnames[:0] // in place slice filter: https://go.dev/wiki/SliceTricks
+	for _, hostname := range hostnames {
+		for _, rir := range rirWHOIS {
+			if !strings.HasSuffix(hostname, strings.TrimPrefix(rir, "whois.")) {
+				filteredHostnames = append(filteredHostnames, hostname)
+			}
+		}
+	}
+	return domainsFromHostnames(filteredHostnames)
 }
