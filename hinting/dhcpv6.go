@@ -175,9 +175,9 @@ func (g *DHCPv6HintGenerator) dispatchDNSInfo(conv []dhcpv6.DHCPv6, dnsChan chan
 	if len(resolvers) < 1 {
 		return
 	}
-	dnsInfo := DNSInfo{resolvers: []string{}, searchDomains: []string{}}
+	dnsInfo := DNSInfo{resolvers: []netip.Addr{}, searchDomains: []string{}}
 	for r := range resolvers {
-		dnsInfo.resolvers = append(dnsInfo.resolvers, r.String())
+		dnsInfo.resolvers = append(dnsInfo.resolvers, r)
 	}
 	for d := range searchDomains {
 		dnsInfo.searchDomains = append(dnsInfo.searchDomains, d)
