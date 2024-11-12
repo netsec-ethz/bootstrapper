@@ -46,15 +46,15 @@ func getDNSConfigIPHlpAPI() (dnsInfo *DNSInfo) {
 	if ias == nil {
 		return nil
 	}
-	var DNSServers []netip.Addr
-	var DNSSearchDomains []string
+	var dnsServers []netip.Addr
+	var dnsSearchDomains []string
 	for pipaa := (*windows.IpAdapterAddresses)(unsafe.Pointer(&ias[0])); pipaa != nil; pipaa = pipaa.Next {
 		if pipaa.FirstDnsServerAddress != nil {
 			for ds := pipaa.FirstDnsServerAddress; ds != nil; ds = ds.Next {
 				dsIP := ds.Address.IP()
 				if dsIP != nil {
 					dsIP, _ := netip.AddrFromSlice(dsIP)
-					DNSServers = append(DNSServers, dsIP)
+					dnsServers = append(dnsServers, dsIP)
 				}
 			}
 		}
@@ -63,12 +63,12 @@ func getDNSConfigIPHlpAPI() (dnsInfo *DNSInfo) {
 			dsd := windows.UTF16PtrToString(pipaa.DnsSuffix)
 			// avoid passing on garbage if pipaa.DnsSuffix wasn't properly null terminated
 			if len(dsd) < 256 {
-				DNSSearchDomains = append(DNSSearchDomains, dsd)
+				dnsSearchDomains = append(dnsSearchDomains, dsd)
 			}
 		}
 	}
-	if len(DNSServers) > 0 || len(DNSSearchDomains) > 0 {
-		dnsInfo = &DNSInfo{resolvers: DNSServers, searchDomains: DNSSearchDomains}
+	if len(dnsServers) > 0 || len(dnsSearchDomains) > 0 {
+		dnsInfo = &DNSInfo{resolvers: dnsServers, searchDomains: dnsSearchDomains}
 	}
 	return
 }
