@@ -7,7 +7,6 @@ import (
 )
 
 func TestReverseLookupDomains(t *testing.T) {
-
 	testCases := []struct {
 		name   string
 		values []struct {
@@ -74,6 +73,7 @@ func TestReverseLookupDomains(t *testing.T) {
 			},
 		},
 	}
+
 	for _, tc := range testCases {
 		t.Log(tc.name)
 		for _, v := range tc.values {
@@ -86,7 +86,6 @@ func TestReverseLookupDomains(t *testing.T) {
 }
 
 func TestDomainsFromHostnamesDerivation(t *testing.T) {
-
 	testCases := []struct {
 		name   string
 		values []struct {
