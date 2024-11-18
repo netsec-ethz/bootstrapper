@@ -38,8 +38,8 @@ func getDNSConfigResolv() (dnsInfo *DNSInfo) {
 		return nil
 	}
 	defer fd.Close()
-	var DNSServers []netip.Addr
-	var DNSSearchDomains []string
+	var dnsServers []netip.Addr
+	var dnsSearchDomains []string
 	scanner := bufio.NewScanner(fd)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -61,14 +61,14 @@ func getDNSConfigResolv() (dnsInfo *DNSInfo) {
 		switch optionName {
 		case "nameserver":
 			for _, serverIP := range optionValues {
-				if ip, err := netip.ParseAddr(serverIP); err == nil && len(DNSServers) < 3 {
-					DNSServers = append(DNSServers, ip)
+				if ip, err := netip.ParseAddr(serverIP); err == nil && len(dnsServers) < 3 {
+					dnsServers = append(dnsServers, ip)
 				}
 			}
 		case "domain":
-			DNSSearchDomains = append(DNSSearchDomains, optionValues[0])
+			dnsSearchDomains = append(dnsSearchDomains, optionValues[0])
 		case "search":
-			DNSSearchDomains = append(DNSSearchDomains, optionValues...)
+			dnsSearchDomains = append(dnsSearchDomains, optionValues...)
 		default:
 			// unhandled options, see https://www.man7.org/linux/man-pages/man5/resolv.conf.5.html for other options
 			// and https://github.com/golang/go/blob/master/src/net/dnsconfig_unix.go for a different
@@ -79,8 +79,8 @@ func getDNSConfigResolv() (dnsInfo *DNSInfo) {
 	if err := scanner.Err(); err != nil {
 		log.Error(fmt.Sprintf("Error while reading %s", resolvPath), "err", err)
 	}
-	if len(DNSServers) > 0 || len(DNSSearchDomains) > 0 {
-		dnsInfo = &DNSInfo{resolvers: DNSServers, searchDomains: DNSSearchDomains}
+	if len(dnsServers) > 0 || len(dnsSearchDomains) > 0 {
+		dnsInfo = &DNSInfo{resolvers: dnsServers, searchDomains: dnsSearchDomains}
 	}
 	return
 }
