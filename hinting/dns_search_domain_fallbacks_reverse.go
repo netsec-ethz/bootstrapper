@@ -39,6 +39,12 @@ func getAkaNS() (nameserver string, err error) {
 	if err == nil {
 		return nameservers[rand.Intn(len(nameservers))].Host, err
 	}
+	if err, ok := err.(*net.DNSError); ok && err.IsNotFound {
+		// Do not attempt further fallback to a public resolver.
+		// We got a NXDOMAIN response or no NS type response. Since we know the NS record exists,
+		// it must have been intentionally shadowed by the system default resolver.
+		return nil, err
+	}
 
 	m := new(dns.Msg)
 	m.SetQuestion(akamaiDomain, dns.TypeNS)
