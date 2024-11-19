@@ -13,6 +13,34 @@ It uses the following hinting mechanisms:
 - DNS-SD: DNS service discovery [RFC6763]
 - mDNS: multicast DNS [RFC6762]
 
+If the host being bootstrapped has no DNS search domain set, the rDNS functionality of DNS (as described in RFC1035)
+is used to obtain a hostname and derive a search domain.
+A query for the name `reversed-external-ip.in-addr-servers.arpa.` (or `reversed-external-ip.ip6.arpa` in the case of
+IPv6) is sent to the default DNS resolver and resolved according to the delegation hierarchy.
+
+---
+**_NOTE:_**
+In case there is no DNS search domain set on the host being bootstrapped **and**
+that host has no public IP address, the *whoami* DNS service on `akamai.net` is used to resolve an
+external IP.
+As a further fallback, in case a nameserver for `akamai.net` cannot be resolved, the public DNS
+resolver `9.9.9.9` provided by Quad9, headquartered in Switzerland and subject to Swiss privacy law, is used
+to obtain the address of further nameservers.
+
+The only information reaching those services are the external IP of the host and the information
+that this host is using the *whoami* service to obtain that address.
+
+All this is only a further fallback to provide zero-configuration bootstrapping even in misconfigured networks.
+
+Calls to these two third-party services can be disabled entirely for a host by null routing their IP with the
+`ip route add 9.9.9.9 via 127.0.0.1 dev lo` command and adding the entry `127.0.0.1   akamai.net` to the hosts file.
+On the network level, calls to those fallbacks can be prevented by providing a proper DNS search domain configuration to
+the endhost using DHCP(v6) or IPv6 RAs. In split-horizon DNS settings, the response to the nameserver query for
+`akamai.net` can be shadowed if required to prevent the fallback.
+Note that other services on your system might rely on those.
+
+---
+
 It integrates with SCION by using the same OpenAPI as the control service uses
 for exposing TRCs (serving as root certificate) and the topology file
 (describing the local SCION topology).

@@ -3,10 +3,12 @@ package hinting
 import (
 	"context"
 	"errors"
-	"github.com/miekg/dns"
 	"math/rand"
 	"net"
 	"net/netip"
+	"time"
+
+	"github.com/miekg/dns"
 )
 
 var (
@@ -31,10 +33,17 @@ func reverseLookupDomains(addr netip.Addr) (domains []string) {
 func getAkaNS() (nameserver string, err error) {
 	// try default resolver
 	resolver := net.Resolver{}
-	ctx := context.TODO()
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(DNSInfoTimeoutFallback-DNSInfoTimeout))
+	defer cancel()
 	nameservers, err := resolver.LookupNS(ctx, akamaiDomain)
 	if err == nil {
 		return nameservers[rand.Intn(len(nameservers))].Host, err
+	}
+	if err, ok := err.(*net.DNSError); ok && err.IsNotFound {
+		// Do not attempt further fallback to a public resolver.
+		// We got a NXDOMAIN response or no NS type response. Since we know the NS record exists,
+		// it must have been intentionally shadowed by the system default resolver.
+		return nil, err
 	}
 
 	m := new(dns.Msg)
