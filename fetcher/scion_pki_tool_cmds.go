@@ -9,9 +9,9 @@ import (
 // scion-pki commands
 
 // spkiTRCExtractCerts extracts the certificates contained in the TRC trustAnchorTRC into rootCertsBundlePath.
-func spkiTRCExtractCerts(ctx context.Context, trustAnchorTRC, rootCertsBundlePath string) error {
+func spkiTRCExtractCerts(ctx context.Context, trustAnchorTRC, rootCertsBundlePath string) ([]byte, error) {
 	return exec.CommandContext(ctx, "scion-pki", "trc", "extract", "certificates",
-		trustAnchorTRC, "-o", rootCertsBundlePath).Run()
+		trustAnchorTRC, "-o", rootCertsBundlePath).CombinedOutput()
 }
 
 // spkiCertVerify verifies the AS certificate asCertChainPath
@@ -22,9 +22,9 @@ func spkiCertVerify(ctx context.Context, trcsUpdateChain []string, asCertChainPa
 }
 
 // spkiTRCVerify verifies the TRC update chain for candidateTRCPath anchored in the TRCs trcUpdateChainPaths
-func spkiTRCVerify(ctx context.Context, trcAnchorPath string, updateChainCandidatePaths []string) error {
+func spkiTRCVerify(ctx context.Context, trcAnchorPath string, updateChainCandidatePaths []string) ([]byte, error) {
 	cmdArgs := []string{"trc", "verify", "--anchor"}
 	cmdArgs = append(cmdArgs, trcAnchorPath)
 	cmdArgs = append(cmdArgs, updateChainCandidatePaths...)
-	return exec.CommandContext(ctx, "scion-pki", cmdArgs...).Run()
+	return exec.CommandContext(ctx, "scion-pki", cmdArgs...).CombinedOutput()
 }
