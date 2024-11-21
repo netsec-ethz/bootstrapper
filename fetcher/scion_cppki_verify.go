@@ -71,7 +71,7 @@ func verifyTopologySignature(cfg *config.Config) error {
 	// verify the AS certificate chain (but not the payload signature) back to the TRCs of the ISD follows the
 	// SCION CP PKI rules about cert type, key usage:
 	if stdoutStderr, err := spkiCertVerify(ctx, sortedTRCsPaths, asCertChainPath); err != nil {
-		return fmt.Errorf("unable to validate certificate chain: %s %w", stdoutStderr, err)
+		return fmt.Errorf("unable to validate certificate chain: %w: scion-pki output: %s", err, stdoutStderr)
 	}
 
 	var unvalidatedTopologyPath string
@@ -149,13 +149,15 @@ func verifyWithRootBundle(ctx context.Context,
 	_, trcFileName := filepath.Split(trustAnchorTRC)
 	rootCertsBundlePath := filepath.Join(verifyPath, trcFileName+".certs.pem")
 	// extract TRC certificates:
-	if err = spkiTRCExtractCerts(ctx, trustAnchorTRC, rootCertsBundlePath); err != nil {
-		return fmt.Errorf("unable to extract root certificates from TRC %s: %w",
-			trustAnchorTRC, err)
+	var stdoutStderr []byte
+	if stdoutStderr, err = spkiTRCExtractCerts(ctx, trustAnchorTRC, rootCertsBundlePath); err != nil {
+		return fmt.Errorf("unable to extract root certificates from TRC %s: %w: scion-pki output: %s",
+			trustAnchorTRC, err, stdoutStderr)
 	}
 	// verify the signature and certificate chain back to a root certs bundle, write out the payload:
-	if err = cmsVerifyOutput(ctx, signedTopology, rootCertsBundlePath, unvalidatedTopologyPath); err != nil {
-		return fmt.Errorf("verifying and extracting signed payload failed: %w", err)
+	if stdoutStderr, err = cmsVerifyOutput(ctx, signedTopology, rootCertsBundlePath, unvalidatedTopologyPath); err != nil {
+		return fmt.Errorf("verifying and extracting signed payload failed: %w: Verification output: %s",
+			err, stdoutStderr)
 	}
 	return
 }
@@ -167,17 +169,19 @@ func extractSignerInfo(ctx context.Context, signedTopology, verifyPath string) (
 
 	detachedSignaturePath := filepath.Join(verifyPath, "detached_signature.p7s")
 	// detach signature for further validation:
-	err = smimePk7out(ctx, signedTopology, detachedSignaturePath)
+	var stdoutStderr []byte
+	stdoutStderr, err = smimePk7out(ctx, signedTopology, detachedSignaturePath)
 	if err != nil {
-		err = fmt.Errorf("unable to detach signature: %w", err)
+		err = fmt.Errorf("unable to detach signature: %w: Verification output: %s", err, stdoutStderr)
 		return
 	}
 
 	asCertHumanChain := filepath.Join(verifyPath, "as_cert_chain.human.pem")
 	// collect included certificates from detached signature:
-	err = pkcs7Certs(ctx, detachedSignaturePath, asCertHumanChain)
+	stdoutStderr, err = pkcs7Certs(ctx, detachedSignaturePath, asCertHumanChain)
 	if err != nil {
-		err = fmt.Errorf("unable to gather included certificates from signature: %w", err)
+		err = fmt.Errorf("unable to gather included certificates from signature: %w: Verification output: %s",
+			err, stdoutStderr)
 		return
 	}
 
@@ -256,9 +260,10 @@ func verifyTRCUpdateChain(outputPath, candidateTRCPath string, strict bool) erro
 	}
 	trcUpdateChainPaths := sortTRCsFiles(trcs).Paths()
 	trcUpdateChainPaths = append(trcUpdateChainPaths, candidateTRCPath)
-	err = spkiTRCVerify(ctx, trcUpdateChainPaths[0], trcUpdateChainPaths[1:])
+	var stdoutStderr []byte
+	stdoutStderr, err = spkiTRCVerify(ctx, trcUpdateChainPaths[0], trcUpdateChainPaths[1:])
 	if err != nil {
-		return fmt.Errorf("validating TRC update chain failed: %w", err)
+		return fmt.Errorf("validating TRC update chain failed: %w: scion-pki output: %s", err, stdoutStderr)
 	}
 	return nil
 }
