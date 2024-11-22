@@ -9,6 +9,7 @@ bazel: go_deps.bzl
 	./.bazel-build-env
 	bazel build //:bootstrapper
 	cp `bazel aquery  'outputs(".*bin/bootstrapper", //:bootstrapper)' --output=text 2>/dev/null | grep "Outputs" | sed -r 's/\s*Outputs: \[(.*)\]/\1/'` bin/
+	ln -sf ./bin/bootstrapper ./scion-bootstrapper
 
 all: build test package
 
@@ -18,7 +19,9 @@ clean:
 
 realclean: clean
 	bazel clean --expunge
-	rm ~/.cache/bazel
+	rm -r ~/.cache/bazel
+	rm -rf ./bazel-*
+	rm -f ./MODULE.bazel*
 	rm -f go_deps.bzl
 
 package: package_deb
@@ -52,6 +55,8 @@ ifeq (,$(wildcard go_deps.bzl))
 	$(file > ./go_deps.bzl,$(go_deps_boilerplate))
 endif
 	bazel run //:gazelle -- update-repos -from_file=go.mod -to_macro=go_deps.bzl%go_deps -prune
+	rm -rf ./bazel-*
+	rm -r ~/.cache/bazel
 
 test: build
 	bazel test --config=unit --test_output=errors ...
