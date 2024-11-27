@@ -60,7 +60,7 @@ realclean: clean
 package: package_deb
 
 package_deb: build
-	if [ ! -x "$$(command -v python3)" ]; then \
+	@if [ ! -x "$$(command -v python3)" ]; then \
 	  echo "Cannot find python3 on your PATH."; \
 	  apt-get install python3 &>/dev/null; \
 	  test $$? -eq 0 || echo "Install python3?\nsudo apt-get install python3" && sudo apt-get install python3; \
@@ -69,7 +69,7 @@ package_deb: build
 	cp bazel-bin/scion-bootstrapper_*_*.deb bin/
 
 package_rpm: build
-	if [ ! -x "$$(command -v rpmbuild)" ]; then \
+	@if [ ! -x "$$(command -v rpmbuild)" ]; then \
 	  echo "Cannot find rpmbuild on your PATH."; \
 	  apt-get install rpm &>/dev/null; \
 	  test $$? -eq 0 || echo "Install rpm toolchain?\nsudo apt-get install rpm" && sudo apt-get install rpm; \
