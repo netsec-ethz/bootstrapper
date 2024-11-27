@@ -30,7 +30,7 @@ install_deps:
 	  fi; \
 	else \
 	  exit 0; \
-	fi;
+	fi; \
 	apt-get install build-essential 2>/dev/null; \
 	test $$? -eq 0 || echo "Install build tools?\nsudo apt-get install build-essential" && sudo apt-get install build-essential
 
