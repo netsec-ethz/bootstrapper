@@ -43,8 +43,8 @@ bazel: go_deps.bzl
 	fi;
 	./.bazel-build-env
 	bazel build //:bootstrapper
-	cp `bazel aquery  'outputs(".*bin/bootstrapper", //:bootstrapper)' --output=text 2>/dev/null | grep "Outputs" | sed -r 's/\s*Outputs: \[(.*)\]/\1/'` bin/
-	ln -sf ./bin/bootstrapper ./scion-bootstrapper
+	@cp `bazel aquery  'outputs(".*bin/bootstrapper", //:bootstrapper)' --output=text 2>/dev/null | grep "Outputs" | sed -r 's/\s*Outputs: \[(.*)\]/\1/'` bin/
+	@ln -sf ./bin/bootstrapper ./scion-bootstrapper
 
 all: bootstrapper test package
 
