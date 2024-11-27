@@ -63,7 +63,7 @@ package_deb: build
 	if [ ! -x "$$(command -v python3)" ]; then \
 	  echo "Cannot find python3 on your PATH."; \
 	  apt-get install python3 &>/dev/null; \
-	  test $$? -eq 0 || echo "Install python3?\nsudo apt-get install python3" && sudo apt-get install python3
+	  test $$? -eq 0 || echo "Install python3?\nsudo apt-get install python3" && sudo apt-get install python3; \
 	fi;
 	bazel build //:scion-bootstrapper-deb
 	cp bazel-bin/scion-bootstrapper_*_*.deb bin/
