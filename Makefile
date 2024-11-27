@@ -22,7 +22,17 @@ bootstrapper:
 	fi;
 
 install_deps:
-	apt-get install build-essential
+	@if [ -z "$${CC}" ] ; then \
+	  if [ ! -x "$$(command -v "gcc")" ]; then \
+	    echo "Cannot find gcc or CC; set the CC environment variable or make sure gcc is on your PATH."; \
+	  else \
+	    exit 0; \
+	  fi; \
+	else \
+	  exit 0; \
+	fi;
+	apt-get install build-essential 2>/dev/null; \
+	test $$? -eq 0 || echo "Install build tools?\nsudo apt-get install build-essential" && sudo apt-get install build-essential
 
 bazel: go_deps.bzl
 	rm -f bin/*
@@ -50,12 +60,20 @@ realclean: clean
 package: package_deb
 
 package_deb: build
-	apt-get install python3
+	if [ ! -x "$$(command -v "python3")" ]; then \
+	  echo "Cannot find python3 on your PATH."; \
+	  apt-get install python3 &>/dev/null; \
+	  test $$? -eq 0 || echo "Install python3?\nsudo apt-get install python3" && sudo apt-get install python3
+	fi;
 	bazel build //:scion-bootstrapper-deb
 	cp bazel-bin/scion-bootstrapper_*_*.deb bin/
 
 package_rpm: build
-	apt-get install rpm
+	if [ ! -x "$$(command -v "rpmbuild")" ]; then \
+	  echo "Cannot find rpmbuild on your PATH."; \
+	  apt-get install rpm &>/dev/null; \
+	  test $$? -eq 0 || echo "Install rpm toolchain?\nsudo apt-get install rpm" && sudo apt-get install rpm
+	fi;
 	bazel build //:scion-bootstrapper-rpm
 	cp bazel-bin/scion-bootstrapper-*.*.rpm bin/
 
