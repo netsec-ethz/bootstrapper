@@ -56,7 +56,7 @@ To build the bootstrapper executable, simply run `make bootstrapper` in the top 
 In order to build the bootstrapper debian package, we use Bazel.
 The service files are in the `./res/packaging/debian/` directory.
 You can install Bazel by following the instructions at https://docs.bazel.build/versions/master/install-ubuntu.html
-You can then build the package by running `bazel build //:scion-bootstrapper-deb`.
+You can then build the package by running `make package_deb`.
 When contributing, please run `make all` in order to make sure that all targets build and to run the linter.
 
 Experimental availability is also provided for macOS and Windows. Run `make darwin` or `make windows` to build a
