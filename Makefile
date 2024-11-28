@@ -10,7 +10,7 @@ bootstrapper:
 	@if [ -n "$${OS}" ] ; then \
 	  UNAME_OS="$${OS}"; \
 	else \
-	  UNAME_OS=$$(uname --kernel-name); \
+	  UNAME_OS=$$(uname -s); \
 	fi; \
 	if [ "$${UNAME_OS}" = "Linux" ] ; then \
 	  make -s build; \

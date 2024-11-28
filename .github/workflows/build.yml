@@ -1,0 +1,72 @@
+name: master
+
+on: [push]
+
+env:
+  timeout: 10
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+      - name: Install build requirements
+        run: |
+          sudo apt-get update
+          sudo apt-get install build-essential rpm python3 -y
+      - name: Build with make
+        timeout-minutes: ${{ fromJSON(env.timeout) }}
+        run: make build
+      - name: Check help
+        run: ./scion-bootstrapper --help
+      - name: Install test requirements
+        run: |
+          wget https://github.com/scionproto/scion/releases/download/v0.12.0/scion_0.12.0_amd64_linux.tar.gz -O /tmp/scion_0.12.0_amd64_linux.tar.gz
+          tar -C /usr/local/bin -xf /tmp/scion_0.12.0_amd64_linux.tar.gz scion-pki
+      - name: Make all
+        timeout-minutes: ${{ fromJSON(env.timeout) }}
+        run: make all
+      - name: Check output
+        run: ls -a ./scion-bootstrapper ./bin/
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+      #- name: Print environment
+      #  run: cmd.exe /K set
+      #- name: Print environment
+      #  run: gci env:* | sort-object name
+      - name: Build with make
+        timeout-minutes: ${{ fromJSON(env.timeout) }}
+        run: make.exe bootstrapper
+      - name: Check output
+        run: dir scion-bootstrapper.exe
+      - name: Check help
+        run: ./scion-bootstrapper.exe --help
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+      #- name: Print environment
+      #  run: env
+      - name: Build with make
+        timeout-minutes: ${{ fromJSON(env.timeout) }}
+        run: make bootstrapper
+      - name: Check output
+        run: ls -a ./scion-bootstrapper ./bin/
+      - name: Check help
+        run: ./scion-bootstrapper --help

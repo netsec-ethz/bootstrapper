@@ -80,7 +80,7 @@ func TestReverseLookupDomains(t *testing.T) {
 				domain string
 			}{
 				{ip: netip.MustParseAddr("163.152.6.10"), domain: "korea.ac.kr"},
-				{ip: randIPFromCIDR("163.152.6.16/29"), domain: "korea.ac.kr"},
+				{ip: randIPFromCIDR("163.152.6.24/29"), domain: "korea.ac.kr"},
 			},
 		},
 	}
