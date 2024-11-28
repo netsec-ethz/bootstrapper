@@ -19,8 +19,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install build-essential rpm python3 -y
       - name: Build with make
-        timeout-minutes: ${{ fromJSON(env.time) }}
-        run: make all
+        timeout-minutes: ${{ fromJSON(env.timeout) }}
+        run: make build
 
   build-windows:
     runs-on: windows-latest
@@ -31,9 +31,11 @@ jobs:
         with:
           go-version-file: 'go.mod'
       - name: Print environment
-        run: set
+        run: cmd.exe /K set
+      - name: Print environment
+        run: gci env:* | sort-object name
       - name: Build with make
-        timeout-minutes: ${{ fromJSON(env.time) }}
+        timeout-minutes: ${{ fromJSON(env.timeout) }}
         run: make.exe bootstrapper
 
   build-macos:
@@ -47,5 +49,5 @@ jobs:
       - name: Print environment
         run: env
       - name: Build with make
-        timeout-minutes: ${{ fromJSON(env.time) }}
+        timeout-minutes: ${{ fromJSON(env.timeout) }}
         run: make bootstrapper
