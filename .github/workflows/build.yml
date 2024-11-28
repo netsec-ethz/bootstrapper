@@ -1,0 +1,45 @@
+name: master
+
+on: [push]
+
+env:
+  timeout: 10
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+      - name: Install build requirements
+        run: |
+          apt-get update
+          apt-get install build-essential rpm python3 -y
+      - name: Build with make
+        timeout-minutes: ${{ fromJSON(env.time) }}
+        run: make all
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+      - name: Print environment
+        run: set
+      - name: Build with make
+        timeout-minutes: ${{ fromJSON(env.time) }}
+        run: make.exe bootstrapper
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+      - name: Print environment
+        run: env
+      - name: Build with make
+        timeout-minutes: ${{ fromJSON(env.time) }}
+        run: make bootstrapper
