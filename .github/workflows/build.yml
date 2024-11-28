@@ -21,6 +21,8 @@ jobs:
       - name: Build with make
         timeout-minutes: ${{ fromJSON(env.timeout) }}
         run: make build
+      - name: Check output
+        run: ls -a ./scion-bootstrapper ./bin/
 
   build-windows:
     runs-on: windows-latest
@@ -37,6 +39,8 @@ jobs:
       - name: Build with make
         timeout-minutes: ${{ fromJSON(env.timeout) }}
         run: make.exe bootstrapper
+      - name: Check output
+        run: dir scion-bootstrapper.exe
 
   build-macos:
     runs-on: macos-latest
@@ -51,3 +55,5 @@ jobs:
       - name: Build with make
         timeout-minutes: ${{ fromJSON(env.timeout) }}
         run: make bootstrapper
+      - name: Check output
+        run: ls -a ./scion-bootstrapper ./bin/
