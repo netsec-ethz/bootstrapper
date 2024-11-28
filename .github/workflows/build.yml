@@ -13,8 +13,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
           with:
-            go-version: '1.22.x'
-            check-latest: true
+            go-version-file: 'go.mod'
       - name: Install build requirements
         run: |
           sudo apt-get update
@@ -30,8 +29,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
           with:
-            go-version: '1.22.x'
-            check-latest: true
+            go-version-file: 'go.mod'
       - name: Print environment
         run: set
       - name: Build with make
@@ -45,8 +43,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
           with:
-            go-version: '1.22.x'
-            check-latest: true
+            go-version-file: 'go.mod'
       - name: Print environment
         run: env
       - name: Build with make
