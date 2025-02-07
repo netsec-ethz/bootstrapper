@@ -18,6 +18,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"sync"
 	"time"
@@ -95,22 +96,31 @@ func (b *Bootstrapper) tryBootstrapping() error {
 		wg.Wait()
 		close(hintersDone)
 	}()
+	seenIPs := make(map[netip.AddrPort]bool)
 OuterLoop:
 	for {
 		select {
 		case ipAddr := <-b.ipHintsChan:
+			serverAddr := &ipAddr
+			if serverAddr.Port == 0 {
+				serverAddr.Port = int(hinting.DiscoveryPort)
+			}
+			addrPort := serverAddr.AddrPort()
+			if seenIPs[addrPort] {
+				log.Info("Ignoring previously seen hint", "hint", ipAddr)
+				continue
+			}
+			// Mark the ip as having been seen before, to prevent duplicate queries.
+			seenIPs[addrPort] = true
 			if err := checkIsRoutable(ipAddr.IP); err != nil {
 				// Ignore IPv6 hints if device does not have an IPv6 address, etc.
 				log.Debug("Ignore hint, no route", "hint", ipAddr, "err", err)
 				continue
 			}
-			serverAddr := &ipAddr
-			if serverAddr.Port == 0 {
-				serverAddr.Port = int(hinting.DiscoveryPort)
-			}
 			err := fetcher.FetchConfiguration(&cfg, serverAddr)
 			if err != nil {
-				return err
+				log.Debug("Failed to fetch configuration from server", "server", serverAddr, "err", err)
+				continue
 			}
 			break OuterLoop
 		case <-hintsTimeout:
