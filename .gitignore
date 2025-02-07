@@ -4,6 +4,7 @@ bin/
 # bazel artifacts
 /bazel-*
 .bazel-cache/
+MODULE.bazel.lock
 
 # IDE project files
 .idea/

@@ -34,7 +34,7 @@ install_deps:
 	apt-get install build-essential 2>/dev/null; \
 	test $$? -eq 0 || echo "Install build tools?\nsudo apt-get install build-essential" && sudo apt-get install build-essential
 
-bazel: go_deps.bzl
+bazel: deps
 	rm -f bin/*
 	@if [ -z "$${CC}" ] ; then \
 	  if [ ! -x "$$(command -v gcc)" ]; then \
@@ -55,7 +55,6 @@ clean:
 realclean: clean
 	bazel clean --expunge
 	rm -f ./MODULE.bazel*
-	rm -f ./go_deps.bzl
 
 package: package_deb
 
@@ -85,19 +84,9 @@ windows:
 	@echo "Experimental"
 	env GOOS=windows go build -o scion-bootstrapper.exe -ldflags "-X github.com/netsec-ethz/bootstrapper/config.versionString="$(./.bazel-build-env | awk '{print $2}')
 
-define go_deps_boilerplate
-# Generated from go.mod by gazelle. DO NOT EDIT
-load("@bazel_gazelle//:deps.bzl", "go_repository")
-
-def go_deps():
-  pass
-endef
-
-go_deps.bzl: go.mod
-ifeq (,$(wildcard go_deps.bzl))
-	$(file > ./go_deps.bzl,$(go_deps_boilerplate))
-endif
-	bazel run //:gazelle -- update-repos -from_file=go.mod -to_macro=go_deps.bzl%go_deps -prune
+deps: go.mod
+	bazel run //:gazelle
+	bazel mod tidy
 	bazel clean --expunge
 
 test: build

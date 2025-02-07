@@ -1,0 +1,42 @@
+module(
+    name = "bootstrapper",
+    version = "0.1",
+)
+
+git_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
+
+bazel_dep(name = "rules_pkg", version = "1.0.1")
+bazel_dep(name = "rules_go", version = "0.50.1", repo_name = "io_bazel_rules_go")
+bazel_dep(name = "gazelle", version = "0.42.0", repo_name = "bazel_gazelle")
+
+go_sdk = use_extension("@io_bazel_rules_go//go:extensions.bzl", "go_sdk")
+go_sdk.download(
+    name = "go_sdk",
+    version = "1.22.7",
+)
+go_sdk.nogo(nogo = "//:nogo")
+use_repo(go_sdk, "go_sdk")
+
+register_toolchains("@go_sdk//:all")
+
+go_deps = use_extension("@bazel_gazelle//:extensions.bzl", "go_deps")
+go_deps.from_file(go_mod = "//:go.mod")
+
+# XXX: nogo requires the analyzers in tools/go for its analysis, bazelmod only loads the go
+# dependencies identified by gazelle, which does not pick up the dependency of nogo. This bypasses
+# the problem by explicitly declaring it.
+go_deps.module(
+    path = "golang.org/x/tools",
+    sum = "h1:Xx0h3TtM9rzQpQuR4dKLrdglAmCEN5Oi+P74JdhdzXE=",
+    version = "v0.29.0",
+)
+use_repo(go_deps, "com_github_grandcat_zeroconf", "com_github_inconshreveable_log15", "com_github_insomniacslk_dhcp", "com_github_mdlayher_ndp", "com_github_miekg_dns", "com_github_pelletier_go_toml", "com_github_stretchr_testify", "org_golang_x_net", "org_golang_x_sys", "org_golang_x_tools")
+
+find_rpm = use_extension("@rules_pkg//toolchains/rpm:rpmbuild_configure.bzl", "find_system_rpmbuild_bzlmod")
+use_repo(find_rpm, "rules_pkg_rpmbuild")
+
+register_toolchains("@rules_pkg_rpmbuild//:all")

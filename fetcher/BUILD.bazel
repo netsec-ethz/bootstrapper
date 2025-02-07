@@ -26,5 +26,8 @@ go_test(
     ],
     embed = [":go_default_library"],
     tags = ["unit"],
-    deps = ["@com_github_inconshreveable_log15//:go_default_library"],
+    deps = [
+        "//config:go_default_library",
+        "@com_github_inconshreveable_log15//:go_default_library",
+    ],
 )

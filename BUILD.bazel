@@ -1,8 +1,7 @@
 load("@bazel_gazelle//:def.bzl", "gazelle")
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library", "nogo")
 load("@rules_pkg//:pkg.bzl", "pkg_deb", "pkg_tar")
-load("@rules_pkg//:rpm.bzl", "pkg_rpm")
-load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
-load("@io_bazel_rules_go//go:def.bzl", "nogo")
+load("@rules_pkg//pkg:rpm.bzl", "pkg_rpm")
 
 # gazelle:prefix github.com/netsec-ethz/bootstrapper
 gazelle(name = "gazelle")
@@ -14,10 +13,10 @@ GOARCH = "amd64" if CI_GOARCH == "" else CI_GOARCH
 
 go_binary(
     name = "bootstrapper",
-    goarch = GOARCH,
-    goos = "linux",
     out = "bootstrapper",
     embed = [":go_default_library"],
+    goarch = GOARCH,
+    goos = "linux",
     visibility = ["//visibility:public"],
     x_defs = {"github.com/netsec-ethz/bootstrapper/config.versionString": "{STABLE_PKG_VERSION_SCION_BOOTSTRAPPER}"},
 )
@@ -95,7 +94,9 @@ PKG_MAINTAINER = "ETH Zurich, SCIONLab Team <scionlab-admins@sympa.ethz.ch>"
 
 # Add package defaults
 ENV_PKG_ARCHITECTURE = ""
+
 CI_TARGET_ARCHITECTURE = ""
+
 ENV_PKG_ARCHITECTURE = CI_TARGET_ARCHITECTURE if ENV_PKG_ARCHITECTURE == "" else ENV_PKG_ARCHITECTURE
 
 PKG_ARCHITECTURE = "amd64" if ENV_PKG_ARCHITECTURE == "" else ENV_PKG_ARCHITECTURE
@@ -117,7 +118,7 @@ pkg_deb(
         "scion-tools",
         "openssl",
         "libcap2-bin",
-        "iproute2"
+        "iproute2",
     ],
     description = PKG_DESCRIPTION,
     homepage = PKG_HOMEPAGE,
