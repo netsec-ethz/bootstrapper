@@ -3,11 +3,11 @@
 #
 
 if [ -z "${reason}" ]; then
-	exit 1
+	return 1
 fi
 
 if [ -z "${interface}" ]; then
-	exit 2
+	return 2
 fi
 
 case "${reason}" in BOUND|RENEW|REBIND|REBOOT|TIMEOUT|BOUND6|RENEW6|REBIND6)
@@ -15,9 +15,9 @@ case "${reason}" in BOUND|RENEW|REBIND|REBOOT|TIMEOUT|BOUND6|RENEW6|REBIND6)
 esac
 
 if [ "${reason}" = "REBOOT" ]; then
-	exit 0
+	return 0
 fi
 
 # Restart scion-daemon if we are not coming from a reboot
 systemctl restart scion-daemon.service
-exit 0
+return 0
